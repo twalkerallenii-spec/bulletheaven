@@ -6,6 +6,10 @@
 
 import { makeScene, updateCamera } from "./scene.js";
 import { makePlayer, updatePlayer } from "./player.js";
+import { initEnemies, updateEnemies, activeEnemies } from "./enemies.js";
+import { initProjectiles, updateProjectiles } from "./projectiles.js";
+import { makeWeapon, updateWeapons } from "./weapons.js";
+import { initCombat, updateCombat } from "./combat.js";
 
 const STATES = {
   MENU: "menu",
@@ -23,6 +27,11 @@ let state = STATES.RUN; // slice: skip menus, go straight to a movable arena
 // --- boot ---
 const { scene, camera, renderer } = makeScene();
 const player = makePlayer(scene);
+player.weapons.push(makeWeapon("pistol")); // starting kit (design §14)
+
+initProjectiles(scene);
+initEnemies(scene);
+initCombat(camera);
 
 // --- fixed timestep (Appendix D.3) ---
 const STEP = 1 / 60; // fixed physics/update step
@@ -46,6 +55,10 @@ function update(dt) {
   if (state !== STATES.RUN) return;
 
   updatePlayer(player, dt);
+  updateEnemies(dt, player); // spawn + home toward player
+  updateWeapons(dt, player); // auto-fire at nearest
+  updateProjectiles(dt); // advance bullets, expire old ones
+  updateCombat(dt, player); // bullet->enemy hits, deaths, floating numbers
 }
 
 function render() {
@@ -65,9 +78,10 @@ function updateDebug() {
   if (dt > 0) fpsSmooth = fpsSmooth * 0.9 + (1 / dt) * 0.1;
   const p = player.position;
   debugEl.textContent =
-    `MATH HEAVEN — slice (steps 1-2)\n` +
-    `state: ${state}\n` +
-    `fps:   ${fpsSmooth.toFixed(0)}\n` +
-    `pos:   x ${p.x.toFixed(1)}  z ${p.z.toFixed(1)}\n` +
-    `move:  WASD / arrow keys`;
+    `MATH HEAVEN — slice (steps 3-5)\n` +
+    `state:   ${state}\n` +
+    `fps:     ${fpsSmooth.toFixed(0)}\n` +
+    `pos:     x ${p.x.toFixed(1)}  z ${p.z.toFixed(1)}\n` +
+    `enemies: ${activeEnemies().length}\n` +
+    `move:    WASD / arrow keys`;
 }
