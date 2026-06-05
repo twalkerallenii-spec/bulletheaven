@@ -64,7 +64,29 @@ function buildModalDOM() {
 
   inputEl.addEventListener("keydown", (e) => {
     e.stopPropagation(); // don't let WASD-capture eat digits
-    if (e.key === "Enter") finish(inputEl.value);
+    if (e.key === "Enter") {
+      finish(inputEl.value);
+      return;
+    }
+    // Allow editing/navigation keys and shortcuts; block everything else
+    // that isn't a digit. Answers are always non-negative whole numbers.
+    const allowed = [
+      "Backspace",
+      "Delete",
+      "ArrowLeft",
+      "ArrowRight",
+      "Home",
+      "End",
+      "Tab",
+    ];
+    if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault(); // not a digit -> reject
+  });
+
+  // Safety net: scrub anything non-digit that still lands (paste, IME, etc).
+  inputEl.addEventListener("input", () => {
+    const cleaned = inputEl.value.replace(/[^0-9]/g, "");
+    if (cleaned !== inputEl.value) inputEl.value = cleaned;
   });
 }
 
