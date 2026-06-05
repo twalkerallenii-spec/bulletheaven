@@ -19,6 +19,11 @@ import {
   masteryScore,
   speedTier,
 } from "./arithmetic.js";
+import {
+  rollUpgradeChoices,
+  applyUpgrade,
+  UPGRADES,
+} from "./upgrades.js";
 
 // The live mastery log (facts object). main.js loads it and passes it in.
 let masteryFacts = null;
@@ -35,6 +40,7 @@ export function initMathMoments({ facts, enterState, resume }) {
 
 // ---- the shared modal (built once, shown/hidden per problem) ----
 let modalEl, problemEl, inputEl, feedbackEl, tagEl, timerEl;
+let answerCard, choiceCard, choiceRow;
 let resolveAnswer = null;
 let startedAt = 0;
 let answerTimer = null;
@@ -53,6 +59,11 @@ function buildModalDOM() {
              spellcheck="false" placeholder="?" />
       <div id="math-feedback"></div>
       <div id="math-hint">type your answer &middot; press Enter</div>
+    </div>
+    <div id="choice-card">
+      <div id="choice-title">LEVEL UP — choose an upgrade</div>
+      <div id="choice-row"></div>
+      <div id="choice-hint">harder problem &middot; bigger boost</div>
     </div>`;
   document.getElementById("ui-overlay").appendChild(modalEl);
 
@@ -61,6 +72,9 @@ function buildModalDOM() {
   feedbackEl = modalEl.querySelector("#math-feedback");
   tagEl = modalEl.querySelector("#math-tag");
   timerEl = modalEl.querySelector("#math-timer");
+  answerCard = modalEl.querySelector("#math-card");
+  choiceCard = modalEl.querySelector("#choice-card");
+  choiceRow = modalEl.querySelector("#choice-row");
 
   inputEl.addEventListener("keydown", (e) => {
     e.stopPropagation(); // don't let WASD-capture eat digits
@@ -97,6 +111,8 @@ function showMathModal(key, tagText) {
   feedbackEl.className = "";
   inputEl.value = "";
   inputEl.disabled = false;
+  answerCard.style.display = "";
+  choiceCard.style.display = "none";
   modalEl.classList.add("show");
   // Focus after the show transition starts so the caret lands reliably.
   requestAnimationFrame(() => inputEl.focus());
@@ -104,6 +120,32 @@ function showMathModal(key, tagText) {
 
 function hideMathModal() {
   modalEl.classList.remove("show");
+}
+
+// Present the 3 upgrade choices; resolves with the chosen choice object on
+// click. Each choice carries { upgradeId, diff, key } so the answer phase can
+// draw the right problem and apply the right upgrade.
+function presentChoices(choices) {
+  return new Promise((resolve) => {
+    answerCard.style.display = "none";
+    choiceCard.style.display = "";
+    choiceRow.innerHTML = "";
+
+    choices.forEach((c) => {
+      const up = UPGRADES[c.upgradeId];
+      const btn = document.createElement("button");
+      btn.className = `choice diff-${c.diff}`;
+      btn.innerHTML = `
+        <div class="choice-diff">${c.diff.toUpperCase()}</div>
+        <div class="choice-icon">${up.icon}</div>
+        <div class="choice-label">${up.label}</div>
+        <div class="choice-desc">${up.desc}</div>`;
+      btn.addEventListener("click", () => resolve(c));
+      choiceRow.appendChild(btn);
+    });
+
+    modalEl.classList.add("show");
+  });
 }
 
 // Returns a Promise<{ correct, seconds, answer, correctAnswer }>.
@@ -169,31 +211,40 @@ function finish(typed) {
 }
 
 // ---- E.2 Level-up (XP fill; difficulty-tiered, 3 choices) ----
-// For the slice the player auto-takes a single difficulty-tagged problem.
-// The 3-choice picker UI lands with upgrades.js; here we prove the math gate.
+// Offer 3 upgrades, one per difficulty (easy/medium/hard). The player picks
+// one, then answers a problem from that difficulty band. Correct -> full
+// boost; wrong -> a scaled-down boost (partial benefit, not nothing). Tier
+// only sets the SIZE of the stat jump (§19).
 export async function runLevelUp(player) {
   onEnterState("levelup");
+  player.level += 1;
 
-  // Draw one fact per difficulty band (fall back to full pool if a band empty).
+  // Three distinct upgrades, tagged easy/medium/hard, each with a fact drawn
+  // from the matching mastery band (fall back to full pool if a band is empty).
   const diffs = ["easy", "medium", "hard"];
-  // Slice: pick a "medium" challenge to demo; full version offers all three.
-  const diff = "medium";
-  const pool = factsByDifficulty(masteryFacts, ALL_KEYS, diff);
-  const key = pickFact(pool.length ? pool : ALL_KEYS, masteryFacts);
-
-  const { correct, seconds, correctAnswer, answer } = await askProblem(key, {
-    tag: `LEVEL UP · ${diff.toUpperCase()}`,
+  const upgradeIds = rollUpgradeChoices(3);
+  const choices = upgradeIds.map((upgradeId, i) => {
+    const diff = diffs[i];
+    const pool = factsByDifficulty(masteryFacts, ALL_KEYS, diff);
+    const key = pickFact(pool.length ? pool : ALL_KEYS, masteryFacts);
+    return { upgradeId, diff, key };
   });
 
-  // Show feedback on the card briefly before resuming.
-  await flashFeedback(correct, correctAnswer);
+  // Player picks one upgrade card.
+  const chosen = await presentChoices(choices);
 
-  if (correct) {
-    player.level += 1; // real upgrade application lands with upgrades.js
-  }
+  // Answer the chosen upgrade's problem.
+  const { correct, correctAnswer } = await askProblem(chosen.key, {
+    tag: `${UPGRADES[chosen.upgradeId].label.toUpperCase()} · ${chosen.diff.toUpperCase()}`,
+  });
+
+  // Apply: full boost on correct, scaled-down on a miss (E.2).
+  applyUpgrade(player, chosen.upgradeId, chosen.diff, { missed: !correct });
+
+  await flashFeedback(correct, correctAnswer);
   hideMathModal();
   onResume();
-  return { correct, seconds, answer };
+  return { correct, upgradeId: chosen.upgradeId, diff: chosen.diff };
 }
 
 // Brief on-card feedback, then a short pause. Encouraging on both paths (§16).

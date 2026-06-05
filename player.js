@@ -34,6 +34,14 @@ export function makePlayer(scene, classStats = { hp: 100, speed: 1.0 }) {
     weapons: [], // live weapon instances
     passives: [], // accumulated passive items
     stats: { pickupRange: 0 }, // recomputed from passives (N.3/N.4)
+    // Combat modifiers (multipliers) adjusted by upgrades, read at fire time.
+    // 1.0 = unmodified. Stat-up upgrades raise these; weapons compute
+    // effective values as base * mod (predictable stacking).
+    mods: {
+      damage: 1.0, // bullet damage multiplier
+      fireRate: 1.0, // higher = faster (shorter interval)
+      projectileSpeed: 1.0,
+    },
     animTimer: 0,
   };
 }

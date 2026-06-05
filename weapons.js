@@ -53,6 +53,7 @@ function nearestEnemy(px, pz) {
 // Tick every weapon the player holds; fire when cooldown elapses.
 export function updateWeapons(dt, player) {
   const p = player.position;
+  const mods = player.mods;
   for (const w of player.weapons) {
     w.cooldown -= dt;
     if (w.cooldown > 0) continue;
@@ -61,8 +62,11 @@ export function updateWeapons(dt, player) {
       const target = nearestEnemy(p.x, p.z);
       if (!target) continue; // nothing to shoot; hold fire, keep cooldown ready
       const tp = target.sprite.mesh.position;
-      spawnBullet(p.x, p.z, tp.x, tp.z, w.bulletSpeed, w.damage);
-      w.cooldown = w.fireInterval;
+      // Effective stats = weapon base * player mods (predictable stacking).
+      const dmg = w.damage * mods.damage;
+      const speed = w.bulletSpeed * mods.projectileSpeed;
+      spawnBullet(p.x, p.z, tp.x, tp.z, speed, dmg);
+      w.cooldown = w.fireInterval / mods.fireRate; // faster fireRate -> shorter
     }
   }
 }

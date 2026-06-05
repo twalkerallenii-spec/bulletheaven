@@ -24,6 +24,11 @@ export const CONFIG = {
   xpBase: 5,
   xpGrowth: 1.1,
 
+  // --- upgrade stat jumps by tier (H, §19) ---
+  easyBoost: 0.05, // +5%
+  mediumBoost: 0.2, // +20%
+  hardBoost: 1.0, // +100%
+
   // --- pickups (N.4) ---
   basePickupRange: 2.5,
   pickupFlySpeed: 12,

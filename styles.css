@@ -294,6 +294,106 @@ html, body {
   color: rgba(245, 245, 255, 0.32);
 }
 
+/* --- upgrade choice picker (E.2 level-up) --- */
+#choice-card {
+  width: min(560px, 92vw);
+  padding: 26px 24px 20px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #141426 0%, #0e0e1c 100%);
+  border: 1px solid rgba(139, 233, 253, 0.22);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  transform: translateY(14px) scale(0.96);
+  transition: transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#math-overlay.show #choice-card {
+  transform: translateY(0) scale(1);
+}
+#choice-title {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #8be9fd;
+  margin-bottom: 18px;
+}
+#choice-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.choice {
+  flex: 1;
+  max-width: 165px;
+  padding: 18px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+  font-family: inherit;
+  color: #f5f5ff;
+  pointer-events: auto;
+}
+.choice:hover {
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.05);
+}
+.choice-diff {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.choice-icon {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+.choice-label {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.choice-desc {
+  font-size: 11px;
+  color: rgba(245, 245, 255, 0.55);
+  line-height: 1.3;
+}
+/* difficulty colors: easy green, medium amber, hard red — bigger risk/reward */
+.choice.diff-easy {
+  border-color: rgba(105, 240, 174, 0.4);
+}
+.choice.diff-easy:hover {
+  border-color: #69f0ae;
+}
+.choice.diff-easy .choice-diff {
+  color: #69f0ae;
+}
+.choice.diff-medium {
+  border-color: rgba(255, 213, 79, 0.4);
+}
+.choice.diff-medium:hover {
+  border-color: #ffd54f;
+}
+.choice.diff-medium .choice-diff {
+  color: #ffd54f;
+}
+.choice.diff-hard {
+  border-color: rgba(255, 82, 82, 0.4);
+}
+.choice.diff-hard:hover {
+  border-color: #ff5252;
+}
+.choice.diff-hard .choice-diff {
+  color: #ff5252;
+}
+#choice-hint {
+  margin-top: 16px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(245, 245, 255, 0.32);
+}
+
 /* --- floating damage numbers (combat.js positions these each frame) --- */
 .floater {
   position: fixed;
