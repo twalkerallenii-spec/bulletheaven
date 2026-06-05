@@ -27,6 +27,106 @@ html, body {
   z-index: 10;
 }
 
+/* --- math prompt modal (§16: center card, dark overlay, frozen game) --- */
+#math-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 6, 14, 0);
+  backdrop-filter: blur(0px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, backdrop-filter 0.18s ease;
+  z-index: 100;
+}
+#math-overlay.show {
+  background: rgba(6, 6, 14, 0.78);
+  backdrop-filter: blur(3px);
+  pointer-events: auto; /* the card is interactive; overlay catches stray clicks */
+  opacity: 1;
+}
+
+#math-card {
+  width: min(420px, 88vw);
+  padding: 32px 28px 24px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #141426 0%, #0e0e1c 100%);
+  border: 1px solid rgba(139, 233, 253, 0.22);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  text-align: center;
+  transform: translateY(14px) scale(0.96);
+  transition: transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#math-overlay.show #math-card {
+  transform: translateY(0) scale(1);
+}
+
+#math-tag {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: #8be9fd;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  opacity: 0.85;
+}
+
+#math-problem {
+  font-size: 52px;
+  font-weight: 800;
+  color: #f5f5ff;
+  letter-spacing: 0.02em;
+  margin-bottom: 22px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 24px rgba(139, 233, 253, 0.18);
+}
+
+#math-input {
+  width: 160px;
+  padding: 12px 8px;
+  font-size: 34px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #ffee58;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(139, 233, 253, 0.3);
+  border-radius: 12px;
+  outline: none;
+  caret-color: #8be9fd;
+  transition: border-color 0.15s;
+}
+#math-input:focus {
+  border-color: #8be9fd;
+  box-shadow: 0 0 0 4px rgba(139, 233, 253, 0.12);
+}
+#math-input::placeholder {
+  color: rgba(245, 245, 255, 0.18);
+}
+
+#math-feedback {
+  min-height: 22px;
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 700;
+}
+#math-feedback.good {
+  color: #69f0ae;
+}
+#math-feedback.miss {
+  color: #ff9e80;
+}
+
+#math-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(245, 245, 255, 0.32);
+}
+
 /* --- floating damage numbers (combat.js positions these each frame) --- */
 .floater {
   position: fixed;
