@@ -27,4 +27,16 @@ export const CONFIG = {
   // --- pickups (N.4) ---
   basePickupRange: 2.5,
   pickupFlySpeed: 12,
+
+  // --- Decision Phase (E.1, B.4) ---
+  decisionIntervalMin: 30, // seconds (randomized each cycle)
+  decisionIntervalMax: 60,
+  // Reward values drawn from systems that exist now (Time + HP). Full
+  // upgrade-tier rewards layer in with upgrades.js.
+  decisionRewards: {
+    instant: { time: 60, heal: 20 }, // ≤2s: huge Time + a heal
+    fast: { time: 25, heal: 0 }, // ≤5s: medium Time
+    slow: { time: 8, heal: 0 }, // slower: small Time
+    curse: { time: -15, damage: 15 }, // wrong: lose Time + take damage
+  },
 };

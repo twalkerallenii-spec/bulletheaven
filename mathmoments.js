@@ -17,6 +17,7 @@ import {
   formatProblem,
   recordAnswer,
   masteryScore,
+  speedTier,
 } from "./arithmetic.js";
 
 // The live mastery log (facts object). main.js loads it and passes it in.
@@ -184,6 +185,43 @@ function flashFeedback(correct, correctAnswer) {
       feedbackEl.className = "miss";
     }
     setTimeout(resolve, correct ? 450 : 900);
+  });
+}
+
+// ---- E.1 Decision Phase (every 30–60s; speed-tiered) ----
+// One adaptive problem. How FAST you answer correctly sets the reward tier
+// (instant/fast/slow); a wrong answer is a curse. Returns the tier so the run
+// applies the matching reward. No countdown shown — speed is what's measured,
+// but we don't want to rush the player with a visible clock here.
+export async function runDecisionPhase(player, { applyReward }) {
+  onEnterState("decision");
+  const key = pickFact(ALL_KEYS, masteryFacts); // adaptive: weighted to weak
+  const { correct, seconds, correctAnswer } = await askProblem(key, {
+    tag: "DECISION · answer fast!",
+  });
+  const tier = speedTier(seconds, correct);
+
+  // Feedback reflects the tier, not just right/wrong (the speed is the point).
+  await flashTierFeedback(tier, correctAnswer, seconds);
+
+  if (applyReward) applyReward(tier);
+  hideMathModal();
+  onResume();
+  return { tier, seconds, correct };
+}
+
+// Tiered feedback: celebrate speed, soften a curse (encouraging tone, §16).
+function flashTierFeedback(tier, correctAnswer, seconds) {
+  return new Promise((resolve) => {
+    const msg = {
+      instant: ["⚡ INSTANT! Huge reward", "good"],
+      fast: ["Fast! Nice reward", "good"],
+      slow: [`Correct (${seconds.toFixed(1)}s) — speed up for more`, "good"],
+      curse: [`It was ${correctAnswer} — careful, that's a curse`, "miss"],
+    }[tier];
+    feedbackEl.textContent = msg[0];
+    feedbackEl.className = msg[1];
+    setTimeout(resolve, tier === "curse" ? 1000 : 600);
   });
 }
 

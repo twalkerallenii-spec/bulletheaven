@@ -10,7 +10,12 @@ import { initEnemies, updateEnemies, activeEnemies } from "./enemies.js";
 import { initProjectiles, updateProjectiles } from "./projectiles.js";
 import { makeWeapon, updateWeapons } from "./weapons.js";
 import { initCombat, updateCombat } from "./combat.js";
-import { initMathMoments, runLevelUp, runRespawnChallenge } from "./mathmoments.js";
+import {
+  initMathMoments,
+  runLevelUp,
+  runRespawnChallenge,
+  runDecisionPhase,
+} from "./mathmoments.js";
 import { loadMastery } from "./save.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
@@ -111,10 +116,44 @@ function onLifeLost() {
   });
 }
 
+// --- Decision Phase (E.1): fires every 30–60s during RUN, speed-tiered ---
+let decisionTimer = randDecisionInterval();
+let decisionPending = false;
+function randDecisionInterval() {
+  const { decisionIntervalMin: lo, decisionIntervalMax: hi } = CONFIG;
+  return lo + Math.random() * (hi - lo);
+}
+function tickDecisionClock(dt) {
+  if (decisionPending) return;
+  decisionTimer -= dt;
+  if (decisionTimer <= 0) {
+    decisionPending = true;
+    runDecisionPhase(player, { applyReward: applyDecisionReward }).finally(() => {
+      decisionTimer = randDecisionInterval();
+      decisionPending = false;
+    });
+  }
+}
+function applyDecisionReward(tier) {
+  const r = CONFIG.decisionRewards[tier];
+  if (!r) return;
+  if (r.time) run.timeEarned = Math.max(0, run.timeEarned + r.time);
+  if (r.heal) player.hp = Math.min(player.maxHp, player.hp + r.heal);
+  if (r.damage) {
+    player.hp -= r.damage; // a curse can hurt, but won't instantly end a run
+    if (player.hp <= 0) player.hp = 1; // floor at 1 — curses sting, don't kill
+  }
+}
+
 // Slice-only restart: reload the page for a guaranteed-clean reset. A proper
 // run-reset + summary screen arrives with the menu work.
 addEventListener("keydown", (e) => {
   if (e.code === "KeyR" && state === STATES.GAMEOVER) location.reload();
+  // TEMP test hook: P fires a Decision Phase now (real cadence is the 30–60s
+  // clock above). Remove once you've confirmed the speed tiers feel right.
+  if (e.code === "KeyP" && state === STATES.RUN && !decisionPending) {
+    decisionTimer = 0;
+  }
 });
 
 // --- fixed timestep (Appendix D.3) ---
@@ -144,6 +183,7 @@ function update(dt) {
   updateProjectiles(dt); // advance bullets, expire old ones
   updateCombat(dt, player, onKill, onLifeLost); // hits, deaths, contact dmg
   updatePickups(dt, player, pickupCallbacks); // magnet + collect -> XP/Time
+  tickDecisionClock(dt); // every 30–60s -> speed-tiered math prompt
 }
 
 function render() {
@@ -164,13 +204,14 @@ function updateDebug() {
   const p = player.position;
   const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
-    `MATH HEAVEN — slice (respawn challenge)\n` +
+    `MATH HEAVEN — slice (decision phase)\n` +
     `state:   ${state}\n` +
     `fps:     ${fpsSmooth.toFixed(0)}\n` +
     `hp:      ${Math.max(0, player.hp)}/${player.maxHp}   lives ${player.lives}\n` +
     `level:   ${player.level}   xp ${player.xp}/${player.xpToNext}\n` +
     `time:    ${run.timeEarned}\n` +
     `enemies: ${activeEnemies().length}\n` +
+    `decision in: ${Math.max(0, decisionTimer).toFixed(0)}s   [P] test now\n` +
     (dead
       ? `\n*** GAME OVER ***  press [R] to restart`
       : `move:    WASD / arrows · avoid the red chasers!`);
