@@ -10,7 +10,7 @@ import { initEnemies, updateEnemies, activeEnemies } from "./enemies.js";
 import { initProjectiles, updateProjectiles } from "./projectiles.js";
 import { makeWeapon, updateWeapons } from "./weapons.js";
 import { initCombat, updateCombat } from "./combat.js";
-import { initMathMoments, runLevelUp } from "./mathmoments.js";
+import { initMathMoments, runLevelUp, runRespawnChallenge } from "./mathmoments.js";
 import { loadMastery } from "./save.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
@@ -91,10 +91,24 @@ const pickupCallbacks = {
   flySpeed: PICKUP_FLY,
 };
 
-// 0 lives -> for this slice, freeze into GAMEOVER. The Respawn math moment
-// replaces this in the next step.
+// 0 lives -> the Respawn challenge (E.3): solve 3 problems in 30s to revive,
+// else the run ends. Reuses the math-moment flow.
+let respawnPending = false;
 function onLifeLost() {
-  state = STATES.GAMEOVER;
+  if (respawnPending) return;
+  respawnPending = true;
+  runRespawnChallenge(player, {
+    onRevive: () => {
+      player.lives = 1; // back in with one life (a real second chance)
+      player.hp = player.maxHp;
+      player.iframe = CONFIG.iframeDuration * 3; // brief grace on revive
+    },
+    onFail: () => {
+      state = STATES.GAMEOVER;
+    },
+  }).finally(() => {
+    respawnPending = false;
+  });
 }
 
 // Slice-only restart: reload the page for a guaranteed-clean reset. A proper
@@ -150,7 +164,7 @@ function updateDebug() {
   const p = player.position;
   const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
-    `MATH HEAVEN — slice (contact damage + lives)\n` +
+    `MATH HEAVEN — slice (respawn challenge)\n` +
     `state:   ${state}\n` +
     `fps:     ${fpsSmooth.toFixed(0)}\n` +
     `hp:      ${Math.max(0, player.hp)}/${player.maxHp}   lives ${player.lives}\n` +

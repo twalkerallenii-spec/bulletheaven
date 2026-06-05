@@ -74,6 +74,25 @@ html, body {
   opacity: 0.85;
 }
 
+#math-timer {
+  display: none;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #8be9fd;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+  transition: color 0.2s;
+}
+#math-timer.urgent {
+  color: #ff5252;
+  animation: timerPulse 0.5s ease-in-out infinite;
+}
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
 #math-problem {
   font-size: 52px;
   font-weight: 800;
