@@ -35,11 +35,25 @@ const SHAPE_COLORS = {
   projectile: 0xffee58, // yellow bullet
 };
 
+// Asset names (what the game requests, matching future SpudMaker sprites) map
+// to a generic kind for fallback coloring. Add an entry per named asset.
+const KIND_ALIAS = {
+  hero_pistoleer: "player",
+  chaser_blob: "chaser",
+  swarmer_bug: "swarmer",
+  ranged_caster: "ranged",
+};
+
+function fallbackColor(kind) {
+  const generic = KIND_ALIAS[kind] || kind;
+  return SHAPE_COLORS[generic] ?? 0xffffff;
+}
+
 function makeShapeFallback(kind) {
   // A flat disc on the XZ plane reads cleanly under the 2.5D tilt camera.
   const geo = new THREE.CircleGeometry(0.5, 16);
   const mat = new THREE.MeshBasicMaterial({
-    color: SHAPE_COLORS[kind] ?? 0xffffff,
+    color: fallbackColor(kind),
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2; // lay flat on the ground plane
