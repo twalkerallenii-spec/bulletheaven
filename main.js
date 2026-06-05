@@ -14,6 +14,7 @@ import { initMathMoments, runLevelUp } from "./mathmoments.js";
 import { loadMastery } from "./save.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
+import { CONFIG } from "./config.js";
 
 const STATES = {
   MENU: "menu",
@@ -77,8 +78,8 @@ function onKill(enemy, x, z) {
   spawnPickup(x + 0.2, z, "time", r.time);
 }
 
-const PICKUP_RANGE = 2.5; // CONFIG.basePickupRange (N.4)
-const PICKUP_FLY = 12; // CONFIG.pickupFlySpeed
+const PICKUP_RANGE = CONFIG.basePickupRange; // N.4
+const PICKUP_FLY = CONFIG.pickupFlySpeed;
 const pickupCallbacks = {
   onXp: (amt) => onXPGained(amt),
   onTime: (amt) => {
@@ -89,6 +90,18 @@ const pickupCallbacks = {
   },
   flySpeed: PICKUP_FLY,
 };
+
+// 0 lives -> for this slice, freeze into GAMEOVER. The Respawn math moment
+// replaces this in the next step.
+function onLifeLost() {
+  state = STATES.GAMEOVER;
+}
+
+// Slice-only restart: reload the page for a guaranteed-clean reset. A proper
+// run-reset + summary screen arrives with the menu work.
+addEventListener("keydown", (e) => {
+  if (e.code === "KeyR" && state === STATES.GAMEOVER) location.reload();
+});
 
 // --- fixed timestep (Appendix D.3) ---
 const STEP = 1 / 60; // fixed physics/update step
@@ -115,7 +128,7 @@ function update(dt) {
   updateEnemies(dt, player); // spawn + home toward player
   updateWeapons(dt, player); // auto-fire at nearest
   updateProjectiles(dt); // advance bullets, expire old ones
-  updateCombat(dt, player, onKill); // hits, deaths -> drops via onKill
+  updateCombat(dt, player, onKill, onLifeLost); // hits, deaths, contact dmg
   updatePickups(dt, player, pickupCallbacks); // magnet + collect -> XP/Time
 }
 
@@ -135,12 +148,16 @@ function updateDebug() {
   lastRenderT = now;
   if (dt > 0) fpsSmooth = fpsSmooth * 0.9 + (1 / dt) * 0.1;
   const p = player.position;
+  const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
-    `MATH HEAVEN — slice (pickups + XP loop)\n` +
+    `MATH HEAVEN — slice (contact damage + lives)\n` +
     `state:   ${state}\n` +
     `fps:     ${fpsSmooth.toFixed(0)}\n` +
+    `hp:      ${Math.max(0, player.hp)}/${player.maxHp}   lives ${player.lives}\n` +
     `level:   ${player.level}   xp ${player.xp}/${player.xpToNext}\n` +
     `time:    ${run.timeEarned}\n` +
     `enemies: ${activeEnemies().length}\n` +
-    `move:    WASD / arrows · kill enemies to fill XP`;
+    (dead
+      ? `\n*** GAME OVER ***  press [R] to restart`
+      : `move:    WASD / arrows · avoid the red chasers!`);
 }
