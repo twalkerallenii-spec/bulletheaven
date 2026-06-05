@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Heaven</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+  { "imports": { "three": "https://esm.sh/three@0.160.0" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="ui-overlay">
+    <!-- HUD + math modals live here. In the steps 1-2 slice this just shows
+         a small debug readout so we can confirm the loop + input are alive. -->
+    <div id="debug-readout"></div>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
