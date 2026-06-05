@@ -10,6 +10,7 @@
 // which stacks predictably across many level-ups.
 
 import { CONFIG } from "./config.js";
+import { WEAPONS, makeWeapon } from "./weapons.js";
 
 // Tier -> boost amount (Appendix H: easyBoost/mediumBoost/hardBoost).
 export const TIER_BOOST = {
@@ -81,20 +82,113 @@ export const UPGRADES = {
   },
 };
 
-const POOL = Object.keys(UPGRADES);
+const STAT_POOL = Object.keys(UPGRADES);
+const MAX_WEAPONS = CONFIG.weaponSlots ?? 6;
 
-// Pick `n` distinct random upgrade ids for the choice screen.
-export function rollUpgradeChoices(n = 3) {
-  const shuffled = [...POOL].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, n);
+// Build the choice pool given the player's current state (VS-style):
+//   • stat upgrades (always available)
+//   • "new weapon" grants for weapons the player doesn't own yet (until the
+//     6-slot cap), so level-ups can expand the arsenal
+//   • "level up weapon X" for owned weapons below max level
+// Returns an array of choice descriptors the level-up screen renders.
+export function buildChoicePool(player) {
+  const owned = new Set(player.weapons.map((w) => w.id));
+  const pool = [];
+
+  // stat upgrades
+  for (const id of STAT_POOL) pool.push({ kind: "stat", upgradeId: id });
+
+  // new-weapon grants (if room)
+  if (player.weapons.length < MAX_WEAPONS) {
+    for (const wid of Object.keys(WEAPONS)) {
+      if (!owned.has(wid)) pool.push({ kind: "newWeapon", weaponId: wid });
+    }
+  }
+
+  // weapon level-ups for owned weapons under max level
+  for (const w of player.weapons) {
+    const def = WEAPONS[w.id];
+    if (w.level < (def.maxLevel ?? 8)) {
+      pool.push({ kind: "weaponLevel", weaponId: w.id });
+    }
+  }
+
+  return pool;
 }
 
-// Apply an upgrade at a given tier (or a scaled-down version on a missed
-// answer — E.2 gives partial benefit rather than nothing).
-export function applyUpgrade(player, upgradeId, tier, { missed = false } = {}) {
-  const up = UPGRADES[upgradeId];
-  if (!up) return;
+// Pick `n` distinct choices from the player-aware pool, weighting toward
+// offering new weapons early (they're the exciting VS moment).
+export function rollChoices(player, n = 3) {
+  const pool = buildChoicePool(player);
+  // Light weighting: new weapons a bit more likely to surface so the arsenal
+  // grows; otherwise uniform.
+  const weighted = [];
+  for (const c of pool) {
+    weighted.push(c);
+    if (c.kind === "newWeapon") weighted.push(c); // double weight
+  }
+  const picked = [];
+  const seen = new Set();
+  let guard = 0;
+  while (picked.length < n && guard++ < 200) {
+    const c = weighted[(Math.random() * weighted.length) | 0];
+    const sig =
+      c.kind + ":" + (c.upgradeId || c.weaponId); // de-dupe identical choices
+    if (!seen.has(sig)) {
+      seen.add(sig);
+      picked.push(c);
+    }
+  }
+  return picked;
+}
+
+// Describe a choice for the UI: icon, label, desc.
+export function describeChoice(c) {
+  if (c.kind === "stat") {
+    const u = UPGRADES[c.upgradeId];
+    return { icon: u.icon, label: u.label, desc: u.desc };
+  }
+  if (c.kind === "newWeapon") {
+    return {
+      icon: "✷",
+      label: WEAPONS[c.weaponId].name,
+      desc: "New weapon!",
+    };
+  }
+  if (c.kind === "weaponLevel") {
+    return {
+      icon: "▲",
+      label: WEAPONS[c.weaponId].name,
+      desc: "Level up weapon",
+    };
+  }
+  return { icon: "?", label: "?", desc: "" };
+}
+
+// Apply a chosen choice at a tier. Correct -> full effect; missed -> partial.
+export function applyChoice(player, c, tier, { missed = false } = {}) {
   let boost = TIER_BOOST[tier] ?? TIER_BOOST.easy;
-  if (missed) boost *= 0.25; // partial benefit on a wrong answer (E.2)
-  up.apply(player, boost);
+  if (missed) boost *= 0.25;
+
+  if (c.kind === "stat") {
+    UPGRADES[c.upgradeId].apply(player, boost);
+  } else if (c.kind === "newWeapon") {
+    // Grant the weapon (ignores boost — it's a binary unlock). A miss still
+    // grants it; the math gated whether you "earned" it cleanly, but VS never
+    // takes a weapon away once offered and chosen.
+    if (
+      player.weapons.length < MAX_WEAPONS &&
+      !player.weapons.some((w) => w.id === c.weaponId)
+    ) {
+      player.weapons.push(makeWeapon(c.weaponId));
+    }
+  } else if (c.kind === "weaponLevel") {
+    const w = player.weapons.find((x) => x.id === c.weaponId);
+    if (w) {
+      w.level += 1;
+      // Leveling a weapon improves its own stats a bit (scaled by tier boost).
+      w.damage *= 1 + boost * 0.5;
+      w.fireInterval *= 1 - Math.min(0.4, boost * 0.2); // faster, floored
+    }
+  }
 }

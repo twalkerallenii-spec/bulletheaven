@@ -8,9 +8,9 @@ import { getMoveVector } from "./input.js";
 const PLAYER_SPEED = 8; // world units / second (tune in config.js later)
 
 export function makePlayer(scene, classStats = { hp: 100, speed: 1.0 }) {
-  // "hero_pistoleer" is the default SpudMaker asset name; falls back to a
+  // "hero_frog" is the SpudMaker asset (green frog-knight); falls back to a
   // light-blue disc until sprites.js exists.
-  const sprite = makeSprite("hero_pistoleer");
+  const sprite = makeSprite("hero_frog");
   sprite.mesh.position.set(0, 0.02, 0); // just above the ground plane
   scene.add(sprite.mesh);
 

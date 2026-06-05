@@ -16,7 +16,7 @@ const SPAWN_INTERVAL = 0.6; // seconds between spawns (thickening trickle later)
 
 // Per-archetype base stats (scaling comes later, §20 "stat-only").
 const ARCHETYPES = {
-  chaser: { hp: 10, speed: 2.2, radius: 0.5, asset: "chaser_blob" },
+  chaser: { hp: 10, speed: 2.2, radius: 0.5, asset: "chaser_imp" },
 };
 
 let scene = null;

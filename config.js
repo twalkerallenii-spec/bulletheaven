@@ -29,6 +29,10 @@ export const CONFIG = {
   mediumBoost: 0.2, // +20%
   hardBoost: 1.0, // +100%
 
+  // --- slots (§19) ---
+  weaponSlots: 6,
+  passiveSlots: 6,
+
   // --- pickups (N.4) ---
   basePickupRange: 2.5,
   pickupFlySpeed: 12,

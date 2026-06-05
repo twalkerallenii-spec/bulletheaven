@@ -38,10 +38,13 @@ const SHAPE_COLORS = {
 // Asset names (what the game requests, matching future SpudMaker sprites) map
 // to a generic kind for fallback coloring. Add an entry per named asset.
 const KIND_ALIAS = {
-  hero_pistoleer: "player",
-  chaser_blob: "chaser",
-  swarmer_bug: "swarmer",
-  ranged_caster: "ranged",
+  hero_frog: "player",
+  chaser_imp: "chaser",
+  swarmer_snow: "swarmer",
+  ranged_imp2: "ranged",
+  boss_golem: "boss",
+  boss_dragon: "boss",
+  boss_seal: "boss",
 };
 
 function fallbackColor(kind) {
@@ -96,6 +99,15 @@ export function makeSprite(kind) {
 
   const mat = new THREE.SpriteMaterial({ map: textures[0], transparent: true });
   const mesh = new THREE.Sprite(mat); // billboards toward the camera
+
+  // World size by asset type so a boss towers over a chaser. Base enemy/hero
+  // footprint ~1.4 units (a touch bigger than the old disc so art reads); the
+  // sprite is centered, lifted so it sits on the ground rather than through it.
+  const SIZE_BY_TYPE = { hero: 1.6, enemy: 1.4, pickup: 0.8, prop: 1.6, boss: 4.0 };
+  const s = SIZE_BY_TYPE[asset.type] ?? 1.4;
+  mesh.scale.set(s, s, 1);
+  mesh.center.set(0.5, 0.1); // anchor near the feet so it stands on the plane
+
   return {
     mesh,
     kind,

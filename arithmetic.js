@@ -111,6 +111,43 @@ export function factsByDifficulty(facts, allKeys, difficulty) {
   return scored.filter((s) => s.m >= 0.5 && s.m < 0.8).map((s) => s.k); // medium
 }
 
+// ---- intrinsic difficulty of a problem (independent of mastery) ----
+// The adaptive design maps difficulty to the player's OWN mastery, but on a
+// fresh save there's no mastery data yet, so an "adaptive hard" slot would draw
+// a random easy fact and mislabel it (e.g. "HARD 1+4"). This gives every fact a
+// floor difficulty from its operands/op so labels are never dishonest:
+//   easy   — add/sub, or small (≤5) multiplication/division
+//   hard   — multiplication/division with a large operand (≥8)
+//   medium — everything in between
+export function intrinsicDifficulty(key) {
+  const { op, a, b } = parseKey(key);
+  if (op === "add" || op === "sub") {
+    const big = Math.max(a, b);
+    return big <= 8 ? "easy" : "medium"; // single-digit add/sub is never "hard"
+  }
+  // mul / div
+  const factor = op === "div" ? b : Math.max(a, b); // div: the divisor is the table
+  if (factor <= 5) return "easy";
+  if (factor >= 8) return "hard";
+  return "medium";
+}
+
+// Pick a fact for a difficulty SLOT that is honest about its label. Prefers the
+// adaptive (mastery) band, but constrains to facts whose intrinsic difficulty
+// matches the slot, so the label always reflects the problem actually shown.
+export function pickFactForDifficulty(facts, allKeys, difficulty) {
+  // Facts whose intrinsic difficulty matches the requested slot.
+  const intrinsic = allKeys.filter(
+    (k) => intrinsicDifficulty(k) === difficulty
+  );
+  // Of those, prefer ones in the adaptive band (weak for hard, mastered for
+  // easy); if that's empty (cold start), use all intrinsically-matching facts.
+  const band = new Set(factsByDifficulty(facts, allKeys, difficulty));
+  const preferred = intrinsic.filter((k) => band.has(k));
+  const pool = preferred.length ? preferred : intrinsic;
+  return pickFact(pool.length ? pool : allKeys, facts);
+}
+
 // ---- speed -> reward tier (Appendix B.4, Decision Phase) ----
 export function speedTier(answerSeconds, wasCorrect) {
   if (!wasCorrect) return "curse"; // wrong: lose Time/HP, debuff

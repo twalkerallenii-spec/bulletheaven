@@ -12,6 +12,7 @@ import {
   ALL_KEYS,
   pickFact,
   factsByDifficulty,
+  pickFactForDifficulty,
   parseKey,
   solve,
   formatProblem,
@@ -20,9 +21,9 @@ import {
   speedTier,
 } from "./arithmetic.js";
 import {
-  rollUpgradeChoices,
-  applyUpgrade,
-  UPGRADES,
+  rollChoices,
+  describeChoice,
+  applyChoice,
 } from "./upgrades.js";
 
 // The live mastery log (facts object). main.js loads it and passes it in.
@@ -132,14 +133,14 @@ function presentChoices(choices) {
     choiceRow.innerHTML = "";
 
     choices.forEach((c) => {
-      const up = UPGRADES[c.upgradeId];
+      const d = describeChoice(c);
       const btn = document.createElement("button");
       btn.className = `choice diff-${c.diff}`;
       btn.innerHTML = `
         <div class="choice-diff">${c.diff.toUpperCase()}</div>
-        <div class="choice-icon">${up.icon}</div>
-        <div class="choice-label">${up.label}</div>
-        <div class="choice-desc">${up.desc}</div>`;
+        <div class="choice-icon">${d.icon}</div>
+        <div class="choice-label">${d.label}</div>
+        <div class="choice-desc">${d.desc}</div>`;
       btn.addEventListener("click", () => resolve(c));
       choiceRow.appendChild(btn);
     });
@@ -219,32 +220,33 @@ export async function runLevelUp(player) {
   onEnterState("levelup");
   player.level += 1;
 
-  // Three distinct upgrades, tagged easy/medium/hard, each with a fact drawn
-  // from the matching mastery band (fall back to full pool if a band is empty).
+  // Three distinct choices from the player's current pool (stat-ups, new
+  // weapons, weapon level-ups), each assigned a difficulty whose label matches
+  // the actual problem (no more "HARD 1+4").
   const diffs = ["easy", "medium", "hard"];
-  const upgradeIds = rollUpgradeChoices(3);
-  const choices = upgradeIds.map((upgradeId, i) => {
-    const diff = diffs[i];
-    const pool = factsByDifficulty(masteryFacts, ALL_KEYS, diff);
-    const key = pickFact(pool.length ? pool : ALL_KEYS, masteryFacts);
-    return { upgradeId, diff, key };
+  const rolled = rollChoices(player, 3);
+  const choices = rolled.map((c, i) => {
+    const diff = diffs[i % 3];
+    const key = pickFactForDifficulty(masteryFacts, ALL_KEYS, diff);
+    return { ...c, diff, key };
   });
 
-  // Player picks one upgrade card.
+  // Player picks one card.
   const chosen = await presentChoices(choices);
 
-  // Answer the chosen upgrade's problem.
+  // Answer the chosen card's problem.
+  const label = describeChoice(chosen).label.toUpperCase();
   const { correct, correctAnswer } = await askProblem(chosen.key, {
-    tag: `${UPGRADES[chosen.upgradeId].label.toUpperCase()} · ${chosen.diff.toUpperCase()}`,
+    tag: `${label} · ${chosen.diff.toUpperCase()}`,
   });
 
-  // Apply: full boost on correct, scaled-down on a miss (E.2).
-  applyUpgrade(player, chosen.upgradeId, chosen.diff, { missed: !correct });
+  // Apply: full effect on correct, scaled-down on a miss (E.2).
+  applyChoice(player, chosen, chosen.diff, { missed: !correct });
 
   await flashFeedback(correct, correctAnswer);
   hideMathModal();
   onResume();
-  return { correct, upgradeId: chosen.upgradeId, diff: chosen.diff };
+  return { correct, choice: chosen };
 }
 
 // Brief on-card feedback, then a short pause. Encouraging on both paths (§16).
