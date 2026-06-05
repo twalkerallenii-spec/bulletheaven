@@ -20,6 +20,7 @@ import { loadMastery } from "./save.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
 import { CONFIG } from "./config.js";
+import { initHUD, updateHUD } from "./hud.js";
 
 const STATES = {
   MENU: "menu",
@@ -45,7 +46,9 @@ initCombat(camera);
 initPickups(scene);
 
 // --- run-scoped tallies (banked to progress on run end later) ---
-const run = { timeEarned: 0 };
+const run = { timeEarned: 0, elapsed: 0 };
+
+initHUD();
 
 // --- arithmetic engine: load the precious mastery log, wire the math moments ---
 const mastery = loadMastery();
@@ -177,6 +180,7 @@ function update(dt) {
   // Math states FREEZE gameplay: the loop runs but entities don't advance.
   if (state !== STATES.RUN) return;
 
+  run.elapsed += dt; // run timer (frozen during math moments by the early return)
   updatePlayer(player, dt);
   updateEnemies(dt, player); // spawn + home toward player
   updateWeapons(dt, player); // auto-fire at nearest
@@ -189,10 +193,11 @@ function update(dt) {
 function render() {
   updateCamera(camera, player.position);
   renderer.render(scene, camera);
+  updateHUD(player, run);
   updateDebug();
 }
 
-// --- debug readout (slice only) ---
+// --- dev readout (small; the real HUD now carries hp/xp/time/lives/timer) ---
 const debugEl = document.getElementById("debug-readout");
 let fpsSmooth = 60;
 let lastRenderT = performance.now();
@@ -201,18 +206,9 @@ function updateDebug() {
   const dt = (now - lastRenderT) / 1000;
   lastRenderT = now;
   if (dt > 0) fpsSmooth = fpsSmooth * 0.9 + (1 / dt) * 0.1;
-  const p = player.position;
   const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
-    `MATH HEAVEN — slice (decision phase)\n` +
-    `state:   ${state}\n` +
-    `fps:     ${fpsSmooth.toFixed(0)}\n` +
-    `hp:      ${Math.max(0, player.hp)}/${player.maxHp}   lives ${player.lives}\n` +
-    `level:   ${player.level}   xp ${player.xp}/${player.xpToNext}\n` +
-    `time:    ${run.timeEarned}\n` +
-    `enemies: ${activeEnemies().length}\n` +
-    `decision in: ${Math.max(0, decisionTimer).toFixed(0)}s   [P] test now\n` +
-    (dead
-      ? `\n*** GAME OVER ***  press [R] to restart`
-      : `move:    WASD / arrows · avoid the red chasers!`);
+    `fps ${fpsSmooth.toFixed(0)} · enemies ${activeEnemies().length}\n` +
+    `decision in ${Math.max(0, decisionTimer).toFixed(0)}s · [P] test\n` +
+    (dead ? `GAME OVER — press [R] to restart` : `WASD/arrows to move`);
 }
