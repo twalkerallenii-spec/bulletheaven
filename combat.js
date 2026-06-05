@@ -27,7 +27,7 @@ function hits(ax, az, ar, bx, bz, br) {
   return (ax - bx) ** 2 + (az - bz) ** 2 <= r * r;
 }
 
-export function updateCombat(dt, player) {
+export function updateCombat(dt, player, onKill) {
   const bullets = activeBullets();
   const enemies = activeEnemies();
 
@@ -44,8 +44,12 @@ export function updateCombat(dt, player) {
         spawnFloater(ep.x, ep.z, Math.round(b.damage));
         releaseBullet(b);
         if (e.hp <= 0) {
+          // Capture death position BEFORE removing the enemy from the scene,
+          // so drops spawn where it died.
+          const dx = ep.x;
+          const dz = ep.z;
           killEnemy(e);
-          // TODO: grantTimeAndXP(e) once economy/pickups land (step 6+).
+          if (onKill) onKill(e, dx, dz); // run wires XP/Time drops here
         }
         break; // bullet spent
       }
