@@ -91,7 +91,7 @@ export function updateEnemies(dt, player) {
     ep.z += (dz / dist) * e.speed * dt;
 
     e.animTimer += dt;
-    e.sprite.setFrame(Math.floor(e.animTimer * 6));
+    e.sprite.setFrame(Math.floor(e.animTimer * 3));
   }
 }
 

@@ -59,5 +59,5 @@ export function updatePlayer(player, dt) {
 
   // Animation tick — no-op for the disc fallback, real once sprites load.
   player.animTimer += dt;
-  player.sprite.setFrame(Math.floor(player.animTimer * 6));
+  player.sprite.setFrame(Math.floor(player.animTimer * 3));
 }
