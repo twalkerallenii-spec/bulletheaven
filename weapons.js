@@ -47,6 +47,43 @@ export const WEAPONS = {
     count: 1,
     maxLevel: 8,
   },
+  beam: {
+    name: "Beam",
+    targeting: "nearest", // rapid-fire at nearest (machine-gun feel)
+    damage: 6,
+    fireInterval: 0.3,
+    bulletSpeed: 26,
+    count: 1,
+    maxLevel: 8,
+  },
+  twin: {
+    name: "Twin",
+    targeting: "twin", // fires at the two nearest enemies at once
+    damage: 11,
+    fireInterval: 1.0,
+    bulletSpeed: 18,
+    count: 1,
+    maxLevel: 8,
+  },
+  scatter: {
+    name: "Scatter",
+    targeting: "spread", // wide 5-pellet shotgun
+    damage: 7,
+    fireInterval: 1.6,
+    bulletSpeed: 15,
+    count: 5,
+    spreadAngle: 0.9,
+    maxLevel: 8,
+  },
+  sniper: {
+    name: "Sniper",
+    targeting: "nearest", // slow, heavy, fast bullet
+    damage: 55,
+    fireInterval: 2.2,
+    bulletSpeed: 34,
+    count: 1,
+    maxLevel: 8,
+  },
 };
 
 // Create a live weapon instance (design A.4) from a definition id.
@@ -85,6 +122,19 @@ function randomEnemy() {
   const enemies = activeEnemies();
   if (!enemies.length) return null;
   return enemies[(Math.random() * enemies.length) | 0];
+}
+
+// The two nearest enemies (for the Twin weapon).
+function twoNearest(px, pz) {
+  const enemies = activeEnemies();
+  let a = null, b = null, da = Infinity, db = Infinity;
+  for (const e of enemies) {
+    const ep = e.sprite.mesh.position;
+    const d = (ep.x - px) ** 2 + (ep.z - pz) ** 2;
+    if (d < da) { db = da; b = a; da = d; a = e; }
+    else if (d < db) { db = d; b = e; }
+  }
+  return [a, b].filter(Boolean);
 }
 
 // Fire a single bullet from (px,pz) along an angle (radians on the XZ plane).
@@ -126,6 +176,13 @@ export function updateWeapons(dt, player) {
         for (let i = 0; i < n; i++) fireAngle(p.x, p.z, start + step * i, speed, dmg);
         fired = true;
       }
+    } else if (w.targeting === "twin") {
+      const targets = twoNearest(p.x, p.z);
+      for (const t of targets) {
+        const tp = t.sprite.mesh.position;
+        spawnBullet(p.x, p.z, tp.x, tp.z, speed, dmg);
+      }
+      if (targets.length) fired = true;
     } else if (w.targeting === "radial") {
       // Ring of bullets in all directions — no target needed (always fires).
       const n = w.count;

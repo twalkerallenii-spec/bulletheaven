@@ -80,7 +80,7 @@ function onXPGained(amount) {
   player.xp += amount;
   if (player.xp >= player.xpToNext && !levelUpPending && state === STATES.RUN) {
     player.xp -= player.xpToNext;
-    player.xpToNext = Math.round(player.xpToNext * 1.1); // gentle, ~steady (D.4)
+    player.xpToNext = Math.round(player.xpToNext * CONFIG.xpGrowth); // grows each level (D.4)
     levelUpPending = true;
     runLevelUp(player).finally(() => {
       levelUpPending = false;

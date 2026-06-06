@@ -32,7 +32,7 @@ export const CONFIG = {
   timeBoss: 300, // Time reward for defeating a boss
 
   // --- XP curve (steady; D.4) ---
-  xpBase: 5,
+  xpBase: 50,
   xpGrowth: 1.1,
 
   // --- upgrade stat jumps by tier (H, §19) ---

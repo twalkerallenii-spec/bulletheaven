@@ -4,6 +4,7 @@
 
 import { makeSprite } from "./sprite.js";
 import { getMoveVector } from "./input.js";
+import { CONFIG } from "./config.js";
 
 const PLAYER_SPEED = 8; // world units / second (tune in config.js later)
 
@@ -28,7 +29,7 @@ export function makePlayer(scene, classStats = { hp: 100, speed: 1.0 }) {
     // --- progression (A.2 / loop) ---
     xp: 0,
     level: 1,
-    xpToNext: 5, // CONFIG.xpBase
+    xpToNext: CONFIG.xpBase, // grows each level (D.4)
     // --- build (A.4) ---
     speedMult: classStats.speed,
     weapons: [], // live weapon instances
