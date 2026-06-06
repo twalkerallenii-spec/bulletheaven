@@ -28,6 +28,10 @@ export function initHUD() {
       <div id="hud-lives"><span class="hud-ic">♥</span> <span id="hud-lives-val">3</span></div>
     </div>
     <div id="hud-weapons"></div>
+    <div id="hud-boss">
+      <div id="hud-boss-name"></div>
+      <div id="hud-boss-bar"><div id="hud-boss-fill"></div></div>
+    </div>
     <div id="hud-hp">
       <div id="hud-hp-fill"></div>
       <div id="hud-hp-label"></div>
@@ -44,6 +48,9 @@ export function initHUD() {
     weapons: hud.querySelector("#hud-weapons"),
     hpFill: hud.querySelector("#hud-hp-fill"),
     hpLabel: hud.querySelector("#hud-hp-label"),
+    bossWrap: hud.querySelector("#hud-boss"),
+    bossName: hud.querySelector("#hud-boss-name"),
+    bossFill: hud.querySelector("#hud-boss-fill"),
   };
 }
 
@@ -55,7 +62,7 @@ function fmtTime(totalSeconds) {
 
 let lastWeaponSig = "";
 
-export function updateHUD(player, run) {
+export function updateHUD(player, run, boss) {
   if (!els) return;
 
   // XP bar + level
@@ -78,6 +85,16 @@ export function updateHUD(player, run) {
   els.hpFill.style.background =
     hpPct > 0.5 ? "#69f0ae" : hpPct > 0.25 ? "#ffd54f" : "#ff5252";
   els.hpLabel.textContent = `${hp} / ${player.maxHp}`;
+
+  // boss HP bar (top-center, only when a boss is active)
+  if (boss) {
+    els.bossWrap.style.display = "block";
+    els.bossName.textContent = `${boss.name}  ·  PHASE ${boss.phase}`;
+    const bpct = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+    els.bossFill.style.width = (bpct * 100).toFixed(1) + "%";
+  } else {
+    els.bossWrap.style.display = "none";
+  }
 
   // weapon icon row — rebuild only when the set/levels change (cheap guard)
   const sig = player.weapons.map((w) => `${w.id}:${w.level}`).join(",");

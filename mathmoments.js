@@ -300,6 +300,30 @@ function flashTierFeedback(tier, correctAnswer, seconds) {
   });
 }
 
+// ---- §18 Pre-boss ritual (one problem -> single-use weapon) ----
+// Before a boss fight, one problem. Correct -> the pre-boss weapon connects,
+// removing 1/4 of the boss's max HP (a head start). Wrong -> you fight full HP.
+// Difficulty here pulls from weak facts (the boss is the payoff for drilling).
+export async function runPreBoss(bossName, { onConnect }) {
+  onEnterState("decision"); // reuse the frozen modal state
+  const key = pickFactForDifficulty(masteryFacts, ALL_KEYS, "hard");
+  const { correct, correctAnswer } = await askProblem(key, {
+    tag: `${bossName.toUpperCase()} APPROACHES · STRIKE!`,
+  });
+  if (correct) {
+    feedbackEl.textContent = "Direct hit! −25% boss HP";
+    feedbackEl.className = "good";
+    if (onConnect) onConnect();
+  } else {
+    feedbackEl.textContent = `It was ${correctAnswer} — you missed the opening`;
+    feedbackEl.className = "miss";
+  }
+  await new Promise((r) => setTimeout(r, correct ? 700 : 1000));
+  hideMathModal();
+  onResume();
+  return { correct };
+}
+
 // ---- E.3 Respawn (all lives gone; 3 problems / 30s total) ----
 // Returns true if the player revived, false if the run ends. The 30s is shared
 // across all three problems (the countdown keeps running between them). Any

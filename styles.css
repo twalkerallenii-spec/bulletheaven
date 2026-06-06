@@ -143,6 +143,40 @@ html, body {
   color: #cbd5e1;
 }
 
+/* boss HP bar — top-center, below the run timer, only shown during a fight */
+#hud-boss {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 60vw);
+  display: none;
+  text-align: center;
+}
+#hud-boss-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #ff5252;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+#hud-boss-bar {
+  height: 14px;
+  border-radius: 8px;
+  background: rgba(10, 10, 22, 0.8);
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  overflow: hidden;
+}
+#hud-boss-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff1744, #ff5252);
+  box-shadow: 0 0 12px rgba(255, 82, 82, 0.5);
+  transition: width 0.2s ease-out;
+}
+
 /* HP bar, bottom-left */
 #hud-hp {
   position: absolute;

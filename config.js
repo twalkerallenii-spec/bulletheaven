@@ -19,6 +19,17 @@ export const CONFIG = {
     miniboss: 25,
     boss: 30,
   },
+  rangedProjectileDamage: 6,
+
+  // --- enemy scaling per minute of survival (§20, M.5) ---
+  hpScalePerMin: 0.15,
+  speedScalePerMin: 0.04,
+  sizeScalePerMin: 0.03,
+
+  // --- threat clock thresholds (kills) — elites/minibosses/bosses (D.4, H) ---
+  firstBossAt: 80, // first boss appears at this many kills (lowered for play)
+  bossEvery: 150,
+  timeBoss: 300, // Time reward for defeating a boss
 
   // --- XP curve (steady; D.4) ---
   xpBase: 5,

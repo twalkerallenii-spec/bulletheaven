@@ -6,7 +6,7 @@
 
 import { makeScene, updateCamera } from "./scene.js";
 import { makePlayer, updatePlayer } from "./player.js";
-import { initEnemies, updateEnemies, activeEnemies } from "./enemies.js";
+import { initEnemies, updateEnemies, activeEnemies, getKills } from "./enemies.js";
 import { initProjectiles, updateProjectiles } from "./projectiles.js";
 import { makeWeapon, updateWeapons } from "./weapons.js";
 import { initCombat, updateCombat } from "./combat.js";
@@ -15,12 +15,21 @@ import {
   runLevelUp,
   runRespawnChallenge,
   runDecisionPhase,
+  runPreBoss,
 } from "./mathmoments.js";
 import { loadMastery } from "./save.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
 import { CONFIG } from "./config.js";
 import { initHUD, updateHUD } from "./hud.js";
+import { initProps, updateProps } from "./props.js";
+import {
+  initBosses,
+  updateBoss,
+  spawnBoss,
+  activeBoss,
+  prebossHit,
+} from "./bosses.js";
 
 const STATES = {
   MENU: "menu",
@@ -44,6 +53,8 @@ initProjectiles(scene);
 initEnemies(scene);
 initCombat(camera);
 initPickups(scene);
+initProps(scene);
+initBosses(scene);
 
 // --- run-scoped tallies (banked to progress on run end later) ---
 const run = { timeEarned: 0, elapsed: 0 };
@@ -148,6 +159,27 @@ function applyDecisionReward(tier) {
   }
 }
 
+// --- Threat clock (D.4, §18): a boss appears at kill thresholds ---
+let nextBossAt = CONFIG.firstBossAt ?? 80;
+let bossSequencePending = false;
+function tickThreatClock() {
+  if (bossSequencePending || activeBoss()) return;
+  if (getKills() >= nextBossAt) {
+    nextBossAt += CONFIG.bossEvery ?? 150;
+    bossSequencePending = true;
+    // Spawn the boss, then run the pre-boss math ritual (freezes the game).
+    const b = spawnBoss("chronodragon", player.position);
+    runPreBoss(b.name, { onConnect: () => prebossHit() }).finally(() => {
+      bossSequencePending = false;
+    });
+  }
+}
+function onBossDefeated(defeated) {
+  // Reward: big Time + a heal (mastery-bonus hook is a later item, §18).
+  run.timeEarned += CONFIG.timeBoss ?? 300;
+  player.hp = Math.min(player.maxHp, player.hp + 40);
+}
+
 // Slice-only restart: reload the page for a guaranteed-clean reset. A proper
 // run-reset + summary screen arrives with the menu work.
 addEventListener("keydown", (e) => {
@@ -183,17 +215,20 @@ function update(dt) {
   run.elapsed += dt; // run timer (frozen during math moments by the early return)
   updatePlayer(player, dt);
   updateEnemies(dt, player); // spawn + home toward player
+  updateBoss(dt, player, onBossDefeated); // boss movement + attacks
   updateWeapons(dt, player); // auto-fire at nearest
   updateProjectiles(dt); // advance bullets, expire old ones
   updateCombat(dt, player, onKill, onLifeLost); // hits, deaths, contact dmg
   updatePickups(dt, player, pickupCallbacks); // magnet + collect -> XP/Time
+  updateProps(player); // scatter scenery around the player
   tickDecisionClock(dt); // every 30–60s -> speed-tiered math prompt
+  tickThreatClock(); // boss at kill thresholds
 }
 
 function render() {
   updateCamera(camera, player.position);
   renderer.render(scene, camera);
-  updateHUD(player, run);
+  updateHUD(player, run, activeBoss());
   updateDebug();
 }
 

@@ -7,8 +7,18 @@
 
 import * as THREE from "three";
 import { activeBullets, releaseBullet } from "./projectiles.js";
-import { activeEnemies, killEnemy } from "./enemies.js";
+import {
+  activeEnemies,
+  killEnemy,
+  activeEnemyBullets,
+  removeEnemyBullet,
+} from "./enemies.js";
 import { CONFIG } from "./config.js";
+import {
+  activeBoss,
+  activeBossBullets,
+  removeBossBullet,
+} from "./bosses.js";
 
 let camera = null;
 let overlay = null;
@@ -57,30 +67,73 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
     }
   }
 
+  // --- bullet -> boss ---
+  const boss = activeBoss();
+  if (boss) {
+    const bpos = boss.sprite.mesh.position;
+    for (let bi = bullets.length - 1; bi >= 0; bi--) {
+      const b = bullets[bi];
+      const bp = b.mesh.position;
+      if (hits(bp.x, bp.z, b.radius, bpos.x, bpos.z, boss.radius)) {
+        boss.hp -= b.damage;
+        spawnFloater(bpos.x, bpos.z, Math.round(b.damage));
+        releaseBullet(b);
+        // boss death handled in updateBoss/onDefeat
+      }
+    }
+  }
+
   // --- enemy -> player: touch damage with i-frames (M.1) ---
-  // Count down invincibility first.
   if (player.iframe > 0) player.iframe = Math.max(0, player.iframe - dt);
 
   const pp = player.position;
+
+  // Shared damage application (used by contact + enemy bullets).
+  function hurtPlayer(dmg) {
+    if (player.iframe > 0) return;
+    player.hp -= dmg;
+    player.iframe = CONFIG.iframeDuration;
+    if (player.hp <= 0) {
+      player.lives -= 1;
+      if (player.lives > 0) player.hp = player.maxHp;
+      else if (onLifeLost) onLifeLost();
+    }
+  }
+
+  // Contact damage from overlapping enemies.
   if (player.iframe === 0) {
     for (const e of enemies) {
       const ep = e.sprite.mesh.position;
-      // player radius ~0.5 (the disc); reuse enemy radius for the check.
       if (hits(pp.x, pp.z, 0.5, ep.x, ep.z, e.radius)) {
-        const dmg = CONFIG.contactDamage[e.kind] ?? 5;
-        player.hp -= dmg;
-        player.iframe = CONFIG.iframeDuration;
-        // (screen shake / hurt sound hook here later)
-        if (player.hp <= 0) {
-          player.lives -= 1;
-          if (player.lives > 0) {
-            player.hp = player.maxHp; // respawn in place for now
-          } else {
-            if (onLifeLost) onLifeLost(); // 0 lives -> run handles GAMEOVER/Respawn
-          }
-        }
-        break; // one hit per frame; i-frames cover the rest
+        hurtPlayer(CONFIG.contactDamage[e.kind] ?? 5);
+        break;
       }
+    }
+  }
+
+  // Ranged enemy projectiles hitting the player.
+  const ebs = activeEnemyBullets();
+  for (let i = ebs.length - 1; i >= 0; i--) {
+    const b = ebs[i];
+    if (hits(pp.x, pp.z, 0.5, b.mesh.position.x, b.mesh.position.z, b.radius)) {
+      hurtPlayer(b.damage);
+      removeEnemyBullet(b);
+    }
+  }
+
+  // Boss projectiles + boss body contact hitting the player.
+  const bbs = activeBossBullets();
+  for (let i = bbs.length - 1; i >= 0; i--) {
+    const b = bbs[i];
+    if (hits(pp.x, pp.z, 0.5, b.mesh.position.x, b.mesh.position.z, b.radius)) {
+      hurtPlayer(b.damage);
+      removeBossBullet(b);
+    }
+  }
+  if (boss && player.iframe === 0) {
+    const bpos = boss.sprite.mesh.position;
+    if (hits(pp.x, pp.z, 0.5, bpos.x, bpos.z, boss.radius)) {
+      hurtPlayer(CONFIG.contactDamage.boss ?? 30);
     }
   }
 
