@@ -1,0 +1,157 @@
+/* menus.css — retro pixel-styled overlay screens: title, menu, class select,
+   game over, practice. All sit on #ui-overlay above the canvas. Pure CSS, no
+   images, Press-Start-style mono font for the retro feel. */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --mh-bg: #0c1a0c;
+  --mh-panel: #14241a;
+  --mh-edge: #2e5a2e;
+  --mh-ink: #e8f5d8;
+  --mh-dim: #8fb98f;
+  --mh-gold: #ffcf4d;
+  --mh-red: #e0584a;
+  --mh-accent: #7fd17f;
+}
+
+.mh-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(46, 90, 46, 0.25), transparent 60%),
+    var(--mh-bg);
+  font-family: 'Press Start 2P', monospace;
+  color: var(--mh-ink);
+  z-index: 40;
+  text-align: center;
+  padding: 24px;
+  overflow-y: auto;
+  -webkit-font-smoothing: none;
+  image-rendering: pixelated;
+}
+.mh-hidden { display: none !important; }
+
+.mh-title {
+  font-size: clamp(22px, 5vw, 44px);
+  color: var(--mh-accent);
+  text-shadow: 3px 3px 0 #1c3a1c, 6px 6px 0 rgba(0,0,0,0.4);
+  letter-spacing: 2px;
+  line-height: 1.4;
+}
+.mh-subtitle {
+  font-size: clamp(8px, 1.6vw, 11px);
+  color: var(--mh-dim);
+  line-height: 1.8;
+  max-width: 560px;
+}
+
+.mh-btn {
+  font-family: inherit;
+  font-size: clamp(10px, 1.8vw, 14px);
+  color: var(--mh-ink);
+  background: var(--mh-panel);
+  border: 3px solid var(--mh-edge);
+  padding: 14px 28px;
+  min-width: 240px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.45);
+  transition: transform 0.06s, background 0.1s, border-color 0.1s;
+}
+.mh-btn:hover {
+  background: #1c3528;
+  border-color: var(--mh-accent);
+  transform: translate(-1px, -1px);
+}
+.mh-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.45); }
+.mh-btn-primary { border-color: var(--mh-gold); color: var(--mh-gold); }
+.mh-btn-primary:hover { background: #2a2410; border-color: var(--mh-gold); }
+.mh-btn-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+.mh-blink { animation: mh-blink 1.1s steps(2, start) infinite; }
+@keyframes mh-blink { 50% { opacity: 0; } }
+
+/* class select cards */
+.mh-cards { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.mh-card {
+  background: var(--mh-panel);
+  border: 3px solid var(--mh-edge);
+  padding: 18px 16px;
+  width: 180px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.45);
+  transition: transform 0.08s, border-color 0.1s;
+}
+.mh-card:hover { border-color: var(--mh-accent); transform: translateY(-3px); }
+.mh-card.mh-selected { border-color: var(--mh-gold); background: #1f3324; }
+.mh-card canvas { width: 96px; height: 96px; image-rendering: pixelated; background: rgba(0,0,0,0.2); border: 2px solid var(--mh-edge); }
+.mh-card-name { font-size: 12px; color: var(--mh-ink); }
+.mh-card-desc { font-size: 8px; color: var(--mh-dim); line-height: 1.7; }
+
+/* end-of-run summary */
+.mh-summary { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; margin: 10px 0; text-align: left; }
+.mh-summary-col { min-width: 220px; }
+.mh-summary-col h3 { font-size: 11px; color: var(--mh-gold); margin-bottom: 14px; letter-spacing: 1px; }
+.mh-summary-col .mh-learn-h { color: var(--mh-accent); }
+.mh-stat { font-size: 9px; color: var(--mh-dim); line-height: 2.1; display: flex; justify-content: space-between; gap: 18px; }
+.mh-stat b { color: var(--mh-ink); font-weight: normal; }
+
+/* practice mode */
+.mh-practice-top { display: flex; align-items: center; justify-content: space-between; width: min(680px, 92vw); margin-bottom: 4px; }
+.mh-practice-prompt {
+  font-size: clamp(28px, 7vw, 56px);
+  color: var(--mh-ink);
+  background: var(--mh-panel);
+  border: 3px solid var(--mh-edge);
+  padding: 26px 40px;
+  min-width: 320px;
+  letter-spacing: 3px;
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.45);
+}
+.mh-practice-input {
+  font-family: inherit;
+  font-size: clamp(20px, 4vw, 32px);
+  text-align: center;
+  width: 200px;
+  padding: 14px;
+  background: #0a140a;
+  border: 3px solid var(--mh-edge);
+  color: var(--mh-gold);
+  letter-spacing: 4px;
+}
+.mh-practice-input:focus { outline: none; border-color: var(--mh-accent); }
+.mh-feedback { font-size: 12px; height: 16px; letter-spacing: 1px; }
+.mh-feedback.ok { color: var(--mh-accent); }
+.mh-feedback.bad { color: var(--mh-red); }
+.mh-practice-stats { font-size: 9px; color: var(--mh-dim); letter-spacing: 1px; line-height: 1.8; }
+
+/* mastery grid */
+.mh-grid-wrap { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.mh-grid-block { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mh-grid-label { font-size: 9px; color: var(--mh-dim); letter-spacing: 1px; }
+.mh-grid { display: grid; gap: 2px; }
+.mh-cell {
+  width: 18px; height: 18px;
+  border: 1px solid rgba(0,0,0,0.3);
+  font-size: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.55);
+}
+
+.mh-hud-corner {
+  position: fixed; top: 12px; left: 12px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px; color: var(--mh-dim);
+  z-index: 30;
+}
