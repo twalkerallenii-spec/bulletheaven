@@ -1,10 +1,4 @@
 // main.js — boot, game state machine, fixed-timestep main loop (Appendix D.3).
-//
-// Now front-to-back: boots to the TITLE screen (menus.js) instead of straight
-// into a run. The menu shell drives class select; main.js exposes startRun() so
-// a run begins on demand, tracks a per-run summary (game + learning stats), and
-// routes death to the game-over screen. "Play Again" resets the run in-place
-// (no page reload).
 
 import { makeScene, updateCamera } from "./scene.js";
 import { makePlayer, updatePlayer } from "./player.js";
@@ -21,7 +15,6 @@ import {
   runPreBoss,
 } from "./mathmoments.js";
 import { loadMastery } from "./save.js";
-import { masteryScore } from "./arithmetic.js";
 import { initPickups, updatePickups, spawnPickup } from "./pickups.js";
 import { rewardFor } from "./economy.js";
 import { CONFIG } from "./config.js";
@@ -33,9 +26,7 @@ import {
   spawnBoss,
   activeBoss,
   prebossHit,
-  clearBoss,
 } from "./bosses.js";
-import { initMenus, showScreen, hideAllScreens } from "./menus.js";
 
 const STATES = {
   MENU: "menu",
@@ -48,14 +39,12 @@ const STATES = {
   GAMEOVER: "gameover",
 };
 
-// Boot into the menu/title — NOT a live run. The run only starts when the
-// player chooses a class (startRun) from the shell.
-let state = STATES.MENU;
-let runActive = false;
+let state = STATES.RUN;
 
-// --- boot the engine once (scene, player, systems persist across runs) ---
+// --- boot ---
 const { scene, camera, renderer } = makeScene();
 const player = makePlayer(scene);
+player.weapons.push(makeWeapon("pistol"));
 
 initProjectiles(scene);
 initEnemies(scene);
@@ -65,8 +54,7 @@ initPickups(scene);
 initProps(scene);
 initBosses(scene);
 
-const run = { timeEarned: 0, elapsed: 0, kills: 0 };
-let masteryBefore = null; // snapshot of mastery scores at run start (for summary)
+const run = { timeEarned: 0, elapsed: 0 };
 
 initHUD();
 
@@ -77,100 +65,6 @@ initMathMoments({
   resume: () => { state = STATES.RUN; },
 });
 
-// ---------- run lifecycle ----------
-// Snapshot every fact's mastery + seen/correct so the end-of-run summary can
-// diff and report what improved during THIS run.
-function snapshotMastery() {
-  const m = loadMastery();
-  const snap = {};
-  for (const k in m.facts) {
-    const r = m.facts[k];
-    snap[k] = {
-      score: masteryScore(r),
-      seen: r.seen || 0,
-      correct: r.correct || 0,
-      avgTime: r && r.correct ? r.totalTime / r.correct : null,
-    };
-  }
-  return snap;
-}
-
-// Reset the run state in-place so "Play Again" needs no page reload. Pools
-// (bullets/pickups/effects) cycle themselves; we clear the boss, reset the
-// player, recenter, and zero the counters.
-function resetRunState() {
-  clearBoss();
-  player.position.x = 0;
-  player.position.z = 0;
-  player.hp = player.maxHp;
-  player.lives = CONFIG.startingLives ?? 3;
-  player.iframe = 0;
-  player.xp = 0;
-  player.level = 1;
-  player.xpToNext = CONFIG.xpBase ?? 25;
-  player.speedMult = 1;
-  player.weapons.length = 0;
-  player.mods.damage = 1;
-  player.mods.fireRate = 1;
-  player.mods.projectileSpeed = 1;
-  player.stats.pickupRange = 0;
-
-  run.timeEarned = 0;
-  run.elapsed = 0;
-  run.kills = 0;
-
-  decisionTimer = randDecisionInterval();
-  decisionPending = false;
-  levelUpPending = false;
-  respawnPending = false;
-  bossSequencePending = false;
-  nextBossAt = CONFIG.firstBossAt ?? 80;
-}
-
-// Called by the menu shell when the player picks a class + answers the problem.
-function startRun(classId, tier) {
-  resetRunState();
-  // starting kit (design §14): everyone starts with the pistol
-  player.weapons.push(makeWeapon("pistol"));
-  player.classId = classId;
-  player.startTier = tier;
-
-  masteryBefore = snapshotMastery();
-  hideAllScreens();
-  runActive = true;
-  state = STATES.RUN;
-}
-
-// Build the end-of-run summary the game-over screen renders.
-function getRunSummary() {
-  const after = snapshotMastery();
-  let answered = 0, correct = 0, improved = [];
-  let fastest = null;
-  for (const k in after) {
-    const b = masteryBefore?.[k] || { seen: 0, correct: 0, score: 0, avgTime: null };
-    const dSeen = after[k].seen - b.seen;
-    const dCorrect = after[k].correct - b.correct;
-    if (dSeen > 0) {
-      answered += dSeen;
-      correct += dCorrect;
-      if (after[k].avgTime != null && (fastest == null || after[k].avgTime < fastest)) {
-        fastest = after[k].avgTime;
-      }
-    }
-    if (after[k].score >= 0.8 && b.score < 0.8 && dSeen > 0) improved.push(k);
-  }
-  return {
-    elapsed: run.elapsed,
-    level: player.level,
-    kills: getKills ? getKills() : run.kills,
-    timeEarned: run.timeEarned,
-    learning: { answered, accuracy: answered ? correct / answered : 0, fastest, improved },
-  };
-}
-
-initMenus({ startRun, getRunSummary });
-
-// ---------- XP / level-up ----------
 let levelUpPending = false;
 function onXPGained(amount) {
   player.xp += amount;
@@ -183,7 +77,6 @@ function onXPGained(amount) {
 }
 
 function onKill(enemy, x, z) {
-  run.kills += 1;
   const r = rewardFor(enemy.kind);
   spawnPickup(x - 0.2, z, "xp", r.xp);
   spawnPickup(x + 0.2, z, "time", r.time);
@@ -198,7 +91,6 @@ const pickupCallbacks = {
   flySpeed: PICKUP_FLY,
 };
 
-// ---------- death / respawn ----------
 let respawnPending = false;
 function onLifeLost() {
   if (respawnPending) return;
@@ -209,18 +101,10 @@ function onLifeLost() {
       player.hp = player.maxHp;
       player.iframe = CONFIG.iframeDuration * 3;
     },
-    onFail: () => { endRun(); },
+    onFail: () => { state = STATES.GAMEOVER; },
   }).finally(() => { respawnPending = false; });
 }
 
-// Run is over -> stop the sim and show the game-over summary.
-function endRun() {
-  runActive = false;
-  state = STATES.GAMEOVER;
-  showScreen("gameover"); // menus.js calls getRunSummary() via fillGameOver
-}
-
-// ---------- decision phase clock ----------
 let decisionTimer = randDecisionInterval();
 let decisionPending = false;
 function randDecisionInterval() {
@@ -249,7 +133,6 @@ function applyDecisionReward(tier) {
   }
 }
 
-// ---------- threat clock (boss) ----------
 let nextBossAt = CONFIG.firstBossAt ?? 80;
 let bossSequencePending = false;
 function tickThreatClock() {
@@ -268,14 +151,13 @@ function onBossDefeated(defeated) {
   player.hp = Math.min(player.maxHp, player.hp + 40);
 }
 
-// ---------- dev keys ----------
 addEventListener("keydown", (e) => {
+  if (e.code === "KeyR" && state === STATES.GAMEOVER) location.reload();
   if (e.code === "KeyP" && state === STATES.RUN && !decisionPending) {
     decisionTimer = 0;
   }
 });
 
-// ---------- main loop ----------
 const STEP = 1 / 60;
 let acc = 0;
 let last = performance.now();
@@ -293,8 +175,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 function update(dt) {
-  // gameplay only advances during an active RUN; menus/screens freeze it
-  if (state !== STATES.RUN || !runActive) return;
+  if (state !== STATES.RUN) return;
 
   run.elapsed += dt;
   updatePlayer(player, dt);
@@ -303,7 +184,7 @@ function update(dt) {
   updateWeapons(dt, player);
   updateProjectiles(dt);
   updateCombat(dt, player, onKill, onLifeLost);
-  updateEffects(dt);
+  updateEffects(dt); // animate impact bursts
   updatePickups(dt, player, pickupCallbacks);
   updateProps(player);
   tickDecisionClock(dt);
@@ -311,29 +192,23 @@ function update(dt) {
 }
 
 function render() {
-  // keep the camera following even on menus so the world sits behind the title
   updateCamera(camera, player.position, scene);
   renderer.render(scene, camera);
-  if (runActive) updateHUD(player, run, activeBoss());
+  updateHUD(player, run, activeBoss());
   updateDebug();
 }
 
-// ---------- debug readout ----------
 const debugEl = document.getElementById("debug-readout");
 let fpsSmooth = 60;
 let lastRenderT = performance.now();
 function updateDebug() {
-  if (!debugEl) return;
   const now = performance.now();
   const dt = (now - lastRenderT) / 1000;
   lastRenderT = now;
   if (dt > 0) fpsSmooth = fpsSmooth * 0.9 + (1 / dt) * 0.1;
-  if (!runActive) {
-    debugEl.textContent = `fps ${fpsSmooth.toFixed(0)} · ${state}`;
-    return;
-  }
+  const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
     `fps ${fpsSmooth.toFixed(0)} · enemies ${activeEnemies().length} · guns ${player.weapons.length}\n` +
     `decision in ${Math.max(0, decisionTimer).toFixed(0)}s · [P] test\n` +
-    `WASD/arrows to move`;
+    (dead ? `GAME OVER — press [R] to restart` : `WASD/arrows to move`);
 }
