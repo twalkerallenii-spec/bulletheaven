@@ -1,46 +1,59 @@
 // sprite.js — the rendering swap layer (design Appendix L + O.3).
 //
 // One abstraction for ALL entity visuals. Game logic never knows whether it's
-// getting a SpudMaker pixel sprite or a colored-shape fallback, so swapping art
-// is a contained change here, not a rewrite.
+// getting a pixel sprite or a colored-shape fallback, so swapping art is a
+// contained change here, not a rewrite.
 //
-// PRIMARY path:  SpudMaker `sprites.js` + generated `world-sprites.js` ->
-//                CanvasTexture pixel sprites (O.3).
-// FALLBACK path: code-generated colored disc (L Phase 1) for anything not yet
-//                drawn. This means a missing sprite never blocks the build.
-//
-// Both sprite sources are imported defensively: a missing file just means those
-// entries fall back to discs. The slice runs today; real art lights up on drop.
+// ROBUST LOADING: the two sprite sources (hand-drawn sprites.js + generated
+// world-sprites.js) are imported INDEPENDENTLY, so one failing can never blank
+// the other. Each load logs loudly so it's obvious in the console whether real
+// art or disc fallbacks are in play. A missing/failed source just means those
+// specific assets fall back to discs — the game always runs.
 
 import * as THREE from "three";
 
 let SPRITES = {};
-try {
-  const mod = await import("./sprites.js");
-  SPRITES = { ...(mod.SPRITES || {}) };
-} catch (e) {
-  console.info("[sprite] no sprites.js found; using colored-shape fallback.");
-}
-// Merge generated world props (trees, bushes, stones, grass, flowers). Kept in
-// a separate module so the hand-drawn sprites.js is never touched.
-try {
-  const wmod = await import("./world-sprites.js");
-  SPRITES = { ...SPRITES, ...(wmod.WORLD_SPRITES || {}) };
-} catch (e) {
-  console.info("[sprite] no world-sprites.js found; props fall back to discs.");
-}
+
+// Load each source on its own. Promise.allSettled so a rejection in one doesn't
+// abort the other (the previous version's single try/catch around both was the
+// bug: one bad import blanked EVERY sprite).
+const sources = [
+  { name: "sprites.js", path: "./sprites.js", key: "SPRITES" },
+  { name: "world-sprites.js", path: "./world-sprites.js", key: "WORLD_SPRITES" },
+  { name: "bullet-sprites.js", path: "./bullet-sprites.js", key: "BULLET_SPRITES" },
+];
+
+await Promise.allSettled(
+  sources.map(async (s) => {
+    try {
+      const mod = await import(s.path);
+      const data = mod[s.key];
+      if (data && typeof data === "object") {
+        const n = Object.keys(data).length;
+        SPRITES = { ...SPRITES, ...data };
+        console.info(`[sprite] loaded ${n} sprites from ${s.name}`);
+      } else {
+        console.warn(`[sprite] ${s.name} loaded but has no ${s.key} export`);
+      }
+    } catch (e) {
+      console.warn(`[sprite] could not load ${s.name} (${e.message}); those assets fall back to discs.`);
+    }
+  })
+);
+
+console.info(`[sprite] total sprites available: ${Object.keys(SPRITES).length}`, Object.keys(SPRITES));
 
 // ---- FALLBACK: colored shapes (design Appendix L Phase 1) ----
 const SHAPE_COLORS = {
-  player: 0x4fc3f7, // light blue
-  chaser: 0xef5350, // red
-  swarmer: 0xffb74d, // orange
-  ranged: 0xab47bc, // purple
-  elite: 0xffd54f, // gold
-  boss: 0xff1744, // intense red
-  pickup: 0x69f0ae, // green gem
-  projectile: 0xffee58, // yellow bullet
-  prop: 0x2f6b3a, // muted green for undrawn props
+  player: 0x4fc3f7,
+  chaser: 0xef5350,
+  swarmer: 0xffb74d,
+  ranged: 0xab47bc,
+  elite: 0xffd54f,
+  boss: 0xff1744,
+  pickup: 0x69f0ae,
+  projectile: 0xffee58,
+  prop: 0x2f6b3a,
 };
 
 const KIND_ALIAS = {
@@ -62,11 +75,11 @@ function makeShapeFallback(kind) {
   const geo = new THREE.CircleGeometry(0.5, 16);
   const mat = new THREE.MeshBasicMaterial({ color: fallbackColor(kind) });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2; // lay flat on the ground plane
-  return { mesh, kind, textures: null, setFrame() {} /* no-op */ };
+  mesh.rotation.x = -Math.PI / 2;
+  return { mesh, kind, textures: null, setFrame() {} };
 }
 
-// ---- PRIMARY: SpudMaker frame array -> crisp CanvasTexture (design O.3) ----
+// ---- PRIMARY: frame array -> crisp CanvasTexture (design O.3) ----
 function frameToTexture(frame, size) {
   const cv = document.createElement("canvas");
   cv.width = size;
@@ -82,14 +95,11 @@ function frameToTexture(frame, size) {
     }
   }
   const tex = new THREE.CanvasTexture(cv);
-  tex.magFilter = THREE.NearestFilter; // crisp pixels, no blur
+  tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   return tex;
 }
 
-// World footprint by asset type. Props are sized against the ~1.4–1.6 character
-// footprint so the world reads coherently (trees tower, stones are underfoot).
-// Per-NAME overrides below handle within-type variation (tree vs grass tuft).
 const SIZE_BY_TYPE = {
   hero: 1.6,
   enemy: 1.4,
@@ -99,19 +109,19 @@ const SIZE_BY_TYPE = {
   projectile: 0.9,
 };
 
-// Per-asset world scale + ground anchor. Anchor y (0..1) is where on the sprite
-// the "feet" are: 0.1 = near the bottom (object stands on the ground), 0.5 =
-// centered (flat ground detail). Trees/bushes stand; grass/flowers/stones are
-// low to the ground.
+// Per-asset world scale + ground anchor. Anchor y (0..1): 0.1 = feet near the
+// bottom (object stands on the ground), 0.5 = centered (flat ground detail).
 const PROP_PROFILE = {
-  prop_tree:    { scale: 3.0, anchor: 0.08 }, // towers over the player
-  prop_pine:    { scale: 3.0, anchor: 0.08 },
-  prop_bush:    { scale: 1.5, anchor: 0.12 }, // ~player height-ish
-  prop_stone:   { scale: 1.0, anchor: 0.15 }, // small, underfoot
+  prop_tree:    { scale: 3.2, anchor: 0.06 },
+  prop_pine:    { scale: 3.2, anchor: 0.06 },
+  prop_bush:    { scale: 1.5, anchor: 0.12 },
+  prop_stone:   { scale: 1.0, anchor: 0.15 },
   prop_pebbles: { scale: 0.9, anchor: 0.2 },
-  prop_grass:   { scale: 1.1, anchor: 0.2 },  // ground detail
+  prop_grass:   { scale: 1.1, anchor: 0.2 },
   prop_flower:  { scale: 1.0, anchor: 0.2 },
   prop_flower2: { scale: 1.0, anchor: 0.2 },
+  prop_house:   { scale: 3.6, anchor: 0.06 },
+  prop_castle:  { scale: 4.4, anchor: 0.05 },
 };
 
 export function makeSprite(kind) {
@@ -119,20 +129,17 @@ export function makeSprite(kind) {
   if (!asset) return makeShapeFallback(kind);
 
   const textures = asset.frames
-    .filter((f) => f.some((px) => px !== null)) // skip an empty frame B
+    .filter((f) => f.some((px) => px !== null))
     .map((f) => frameToTexture(f, asset.size));
 
   if (textures.length === 0) return makeShapeFallback(kind);
 
   const mat = new THREE.SpriteMaterial({ map: textures[0], transparent: true });
-  const mesh = new THREE.Sprite(mat); // billboards toward the camera
+  const mesh = new THREE.Sprite(mat);
 
-  // Size: per-name prop profile wins; else by type.
   const profile = PROP_PROFILE[kind];
   const s = profile ? profile.scale : SIZE_BY_TYPE[asset.type] ?? 1.4;
   mesh.scale.set(s, s, 1);
-  // Anchor near the feet so the sprite stands on the plane rather than through
-  // it. Props get a profile anchor; entities use the standard near-feet value.
   const anchorY = profile ? profile.anchor : 0.1;
   mesh.center.set(0.5, anchorY);
 
@@ -144,4 +151,46 @@ export function makeSprite(kind) {
       if (textures.length > 1) mat.map = textures[i % textures.length];
     },
   };
+}
+
+// Bullet textures: the projectile pool maps these onto flat planes. Returns a
+// crisp CanvasTexture for a named bullet sprite, or null if the sprite isn't
+// loaded (caller then uses a plain colored disc). Cached so repeated bullets of
+// the same kind share one texture (keeps GPU memory + draw setup low).
+const bulletTexCache = new Map();
+export function bulletTexture(name) {
+  if (bulletTexCache.has(name)) return bulletTexture._get(name);
+  const asset = SPRITES[name];
+  if (!asset) {
+    bulletTexCache.set(name, null);
+    return null;
+  }
+  const tex = frameToTexture(asset.frames[0], asset.size);
+  bulletTexCache.set(name, tex);
+  return tex;
+}
+bulletTexture._get = (name) => bulletTexCache.get(name);
+
+// Is a given bullet sprite available? (lets weapons fall back gracefully)
+export function hasBulletSprite(name) {
+  return !!SPRITES[name];
+}
+
+// Effect frames: returns an array of cached CanvasTextures (one per animation
+// frame) for a multi-frame effect sprite, or null if it isn't loaded. Used by
+// effects.js to play impact bursts. Cached so repeated bursts share textures.
+const effectTexCache = new Map();
+export function effectFrames(name) {
+  if (effectTexCache.has(name)) return effectTexCache.get(name);
+  const asset = SPRITES[name];
+  if (!asset || !asset.frames) {
+    effectTexCache.set(name, null);
+    return null;
+  }
+  const texes = asset.frames
+    .filter((f) => f.some((px) => px !== null))
+    .map((f) => frameToTexture(f, asset.size));
+  const result = texes.length ? texes : null;
+  effectTexCache.set(name, result);
+  return result;
 }

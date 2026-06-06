@@ -1,54 +1,64 @@
 // projectiles.js — bullet pooling (design Appendix G, M.5).
 //
 // Perf-critical: never allocate bullets mid-run. Pre-allocate a pool and reuse.
-// Each bullet is a small disc travelling on the XZ plane with a velocity, a
-// lifetime, and a damage value. Weapons call spawnBullet(); combat reads the
-// active list for collisions; spent/expired bullets are released back.
+// Each bullet travels on the XZ plane with a velocity, lifetime, and damage.
+// Weapons call spawnBullet() with a STYLE; the style names a real bullet SPRITE
+// (sliced from the purchased Effect_and_Bullet sheets) plus a size — so guns
+// fire glowing textured projectiles (water/purple/green/fire orbs, stars, etc.)
+// rather than flat colored dots. If a sprite isn't found, we fall back to a
+// plain colored disc so nothing ever vanishes.
 //
-// Bullets can carry an optional BEHAVIOR (set by weapons.js after spawn):
-//   "return" — flies out, then curves back through the player (boomerang)
-//   "homing" — steers toward the nearest enemy each frame (missile)
-//   "orbit"  — circles the player at a fixed radius for a while (orbiting ring)
-// Plain bullets (no behavior) just travel straight. Behavior fields are reset
-// on release so a recycled bullet never inherits stale state.
+// Behavior (return/homing/orbit) is set by weapons.js after spawn. Behavior +
+// style fields reset on release so a recycled bullet never carries stale state.
 
 import * as THREE from "three";
 import { activeEnemies } from "./enemies.js";
+import { bulletTexture, hasBulletSprite } from "./sprite.js";
 
-const POOL_SIZE = 800; // bumped for duplicate-stacked firepower (the flood)
-const BULLET_RADIUS = 0.18;
-const BULLET_LIFETIME = 2.5; // seconds before auto-release (off-screen cleanup)
+const POOL_SIZE = 900;
+const BASE_HALF = 0.28; // half-size of a 1x bullet plane in world units
+const BULLET_LIFETIME = 2.5;
 
 let scene = null;
 const free = [];
 const active = [];
 
-const bulletGeo = new THREE.CircleGeometry(BULLET_RADIUS, 10);
-const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffee58 }); // yellow
+// One shared unit plane; we scale per bullet. (Sprites are square 16x16 art.)
+const planeGeo = new THREE.PlaneGeometry(BASE_HALF * 2, BASE_HALF * 2);
+
+// Material cache. Textured bullets cache by sprite name; the disc fallback
+// caches by color. Keeps material count bounded even with the flood.
+const texMatCache = new Map();
+function texMaterialFor(name) {
+  if (texMatCache.has(name)) return texMatCache.get(name);
+  const tex = bulletTexture(name);
+  const mat = tex
+    ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+    : null;
+  texMatCache.set(name, mat);
+  return mat;
+}
+const colorMatCache = new Map();
+function colorMaterialFor(color) {
+  if (colorMatCache.has(color)) return colorMatCache.get(color);
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false,
+  });
+  colorMatCache.set(color, mat);
+  return mat;
+}
 
 function makeBullet() {
-  const mesh = new THREE.Mesh(bulletGeo, bulletMat);
+  const mesh = new THREE.Mesh(planeGeo, colorMaterialFor(0xffee58));
   mesh.rotation.x = -Math.PI / 2; // flat on the ground plane
   mesh.visible = false;
   return {
     mesh,
-    vx: 0,
-    vz: 0,
-    life: 0,
-    damage: 0,
-    active: false,
-    radius: BULLET_RADIUS,
-    // behavior fields (cleared on release)
-    behavior: null,
-    age: 0,
-    returnAt: 0,
-    origin: null,
-    baseSpeed: 0,
-    turnRate: 0,
-    speed: 0,
-    angle: 0,
-    orbitRadius: 0,
-    orbitSpeed: 0,
+    vx: 0, vz: 0, life: 0, damage: 0, active: false, radius: BASE_HALF,
+    shape: "round",
+    behavior: null, age: 0, returnAt: 0, origin: null,
+    baseSpeed: 0, turnRate: 0, speed: 0, angle: 0,
+    orbitRadius: 0, orbitSpeed: 0,
   };
 }
 
@@ -61,10 +71,47 @@ export function initProjectiles(sceneRef) {
   }
 }
 
-// Spawn a bullet at (x,z) travelling toward (tx,tz) at `speed` units/sec.
-export function spawnBullet(x, z, tx, tz, speed, damage) {
+// style = { sprite, color, shape, size, length }
+//   sprite — bullet sprite name (e.g. "bullet_fire_orb_small"); if present and
+//            loaded, the bullet is textured. Otherwise falls back to `color`.
+//   color  — hex fallback when no sprite
+//   shape  — "round" | "tracer" (tracer stretches + orients along travel)
+//   size   — overall size multiplier
+//   length — long-axis multiplier for tracers
+function applyStyle(b, style) {
+  const shape = style?.shape ?? "round";
+  const size = style?.size ?? 1;
+  const length = style?.length ?? 1;
+  b.shape = shape;
+
+  // pick textured material if the sprite exists, else colored disc
+  let mat = null;
+  if (style?.sprite && hasBulletSprite(style.sprite)) {
+    mat = texMaterialFor(style.sprite);
+  }
+  if (!mat) mat = colorMaterialFor(style?.color ?? 0xffee58);
+  b.mesh.material = mat;
+
+  if (shape === "tracer") {
+    b.mesh.scale.set(size * length, size, 1);
+    b.radius = BASE_HALF * size;
+    b.mesh.rotation.x = -Math.PI / 2;
+  } else {
+    b.mesh.scale.set(size, size, 1);
+    b.radius = BASE_HALF * size;
+    b.mesh.rotation.set(-Math.PI / 2, 0, 0);
+  }
+}
+
+function orientTracer(b) {
+  if (b.shape !== "tracer") return;
+  const ang = Math.atan2(b.vz, b.vx);
+  b.mesh.rotation.set(-Math.PI / 2, 0, -ang);
+}
+
+export function spawnBullet(x, z, tx, tz, speed, damage, style) {
   const b = free.pop();
-  if (!b) return null; // pool exhausted — silently skip (cap behavior)
+  if (!b) return null;
   const dx = tx - x;
   const dz = tz - z;
   const len = Math.hypot(dx, dz) || 1;
@@ -74,11 +121,15 @@ export function spawnBullet(x, z, tx, tz, speed, damage) {
   b.damage = damage;
   b.active = true;
   b.mesh.visible = true;
-  b.mesh.position.set(x, 0.05, z);
-  // reset behavior to plain (weapons.js may attach one right after)
+  b.mesh.position.set(x, 0.06, z);
   b.behavior = null;
   b.age = 0;
   b.origin = null;
+  // remember the effect theme for combat to spawn a matching impact burst
+  b.fx = style?.fx || null;
+  b.fxKill = style?.fxKill || null;
+  applyStyle(b, style);
+  orientTracer(b);
   active.push(b);
   return b;
 }
@@ -95,15 +146,11 @@ export function releaseBullet(b) {
 
 function nearestEnemyTo(x, z) {
   const enemies = activeEnemies();
-  let best = null;
-  let bestD = Infinity;
+  let best = null, bestD = Infinity;
   for (const e of enemies) {
     const ep = e.sprite.mesh.position;
     const d = (ep.x - x) ** 2 + (ep.z - z) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = e;
-    }
+    if (d < bestD) { bestD = d; best = e; }
   }
   return best;
 }
@@ -113,7 +160,6 @@ export function updateProjectiles(dt) {
     const b = active[i];
 
     if (b.behavior === "orbit") {
-      // circle the player at a fixed radius; expire after b.life
       b.life -= dt;
       b.angle += b.orbitSpeed * dt;
       const ox = b.origin ? b.origin.x : 0;
@@ -125,14 +171,10 @@ export function updateProjectiles(dt) {
     }
 
     if (b.behavior === "homing") {
-      // steer the velocity toward the nearest enemy, capped by turn rate
       const tgt = nearestEnemyTo(b.mesh.position.x, b.mesh.position.z);
       if (tgt) {
         const tp = tgt.sprite.mesh.position;
-        const desired = Math.atan2(
-          tp.z - b.mesh.position.z,
-          tp.x - b.mesh.position.x
-        );
+        const desired = Math.atan2(tp.z - b.mesh.position.z, tp.x - b.mesh.position.x);
         let cur = Math.atan2(b.vz, b.vx);
         let diff = desired - cur;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -141,6 +183,7 @@ export function updateProjectiles(dt) {
         cur += Math.max(-maxTurn, Math.min(maxTurn, diff));
         b.vx = Math.cos(cur) * b.speed;
         b.vz = Math.sin(cur) * b.speed;
+        orientTracer(b);
       }
       b.mesh.position.x += b.vx * dt;
       b.mesh.position.z += b.vz * dt;
@@ -150,15 +193,12 @@ export function updateProjectiles(dt) {
     }
 
     if (b.behavior === "return") {
-      // fly out, then reverse and home back through the player position
       b.age += dt;
       if (b.age >= b.returnAt && b.origin) {
-        const desired = Math.atan2(
-          b.origin.z - b.mesh.position.z,
-          b.origin.x - b.mesh.position.x
-        );
+        const desired = Math.atan2(b.origin.z - b.mesh.position.z, b.origin.x - b.mesh.position.x);
         b.vx = Math.cos(desired) * b.baseSpeed;
         b.vz = Math.sin(desired) * b.baseSpeed;
+        orientTracer(b);
       }
       b.mesh.position.x += b.vx * dt;
       b.mesh.position.z += b.vz * dt;
@@ -167,7 +207,6 @@ export function updateProjectiles(dt) {
       continue;
     }
 
-    // plain straight-line bullet
     b.mesh.position.x += b.vx * dt;
     b.mesh.position.z += b.vz * dt;
     b.life -= dt;

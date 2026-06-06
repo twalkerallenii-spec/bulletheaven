@@ -1,9 +1,9 @@
 // combat.js — collisions, damage, deaths, floating damage numbers (step 5).
 //
-// Slice scope: bullet -> enemy hits. Enemy contact damage to the player (M.1,
-// i-frames) is stubbed in and ready but not wired to a death flow yet — that
-// arrives with lives/respawn. Floating numbers are DOM nodes projected from the
-// enemy's world position onto the #ui-overlay each frame they live.
+// Slice scope: bullet -> enemy hits + enemy contact damage to the player (M.1,
+// i-frames). Now also spawns a themed impact burst (effects.js) on hits/kills,
+// using the bullet's effect color. Floating numbers are DOM nodes projected
+// from world position onto the #ui-overlay each frame they live.
 
 import * as THREE from "three";
 import { activeBullets, releaseBullet } from "./projectiles.js";
@@ -19,20 +19,20 @@ import {
   activeBossBullets,
   removeBossBullet,
 } from "./bosses.js";
+import { spawnEffect } from "./effects.js";
 
 let camera = null;
 let overlay = null;
-const floaters = []; // { el, x, y, z, life, vy }
+const floaters = [];
 
-const FLOATER_LIFE = 0.8; // seconds
-const FLOATER_RISE = 1.4; // world units it drifts up over its life
+const FLOATER_LIFE = 0.8;
+const FLOATER_RISE = 1.4;
 
 export function initCombat(cameraRef) {
   camera = cameraRef;
   overlay = document.getElementById("ui-overlay");
 }
 
-// Circle-vs-circle overlap on the XZ plane.
 function hits(ax, az, ar, bx, bz, br) {
   const r = ar + br;
   return (ax - bx) ** 2 + (az - bz) ** 2 <= r * r;
@@ -43,7 +43,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
   const enemies = activeEnemies();
 
   // --- bullet -> enemy ---
-  // Iterate bullets; first enemy hit consumes the bullet (no pierce yet).
   for (let bi = bullets.length - 1; bi >= 0; bi--) {
     const b = bullets[bi];
     const bp = b.mesh.position;
@@ -53,16 +52,20 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
       if (hits(bp.x, bp.z, b.radius, ep.x, ep.z, e.radius)) {
         e.hp -= b.damage;
         spawnFloater(ep.x, ep.z, Math.round(b.damage));
-        releaseBullet(b);
+        const fx = b.fx || "fx_fire_spark";
         if (e.hp <= 0) {
-          // Capture death position BEFORE removing the enemy from the scene,
-          // so drops spawn where it died.
           const dx = ep.x;
           const dz = ep.z;
+          // bigger burst on a kill
+          spawnEffect(b.fxKill || "fx_fire_shock", dx, dz, { size: 1.3, duration: 0.4 });
           killEnemy(e);
-          if (onKill) onKill(e, dx, dz); // run wires XP/Time drops here
+          if (onKill) onKill(e, dx, dz);
+        } else {
+          // small spark on a non-lethal hit
+          spawnEffect(fx, ep.x, ep.z, { size: 0.7, duration: 0.25 });
         }
-        break; // bullet spent
+        releaseBullet(b);
+        break;
       }
     }
   }
@@ -77,8 +80,8 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
       if (hits(bp.x, bp.z, b.radius, bpos.x, bpos.z, boss.radius)) {
         boss.hp -= b.damage;
         spawnFloater(bpos.x, bpos.z, Math.round(b.damage));
+        spawnEffect(b.fx || "fx_fire_spark", bp.x, bp.z, { size: 0.8, duration: 0.25 });
         releaseBullet(b);
-        // boss death handled in updateBoss/onDefeat
       }
     }
   }
@@ -88,7 +91,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
 
   const pp = player.position;
 
-  // Shared damage application (used by contact + enemy bullets).
   function hurtPlayer(dmg) {
     if (player.iframe > 0) return;
     player.hp -= dmg;
@@ -100,7 +102,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
     }
   }
 
-  // Contact damage from overlapping enemies.
   if (player.iframe === 0) {
     for (const e of enemies) {
       const ep = e.sprite.mesh.position;
@@ -111,7 +112,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
     }
   }
 
-  // Ranged enemy projectiles hitting the player.
   const ebs = activeEnemyBullets();
   for (let i = ebs.length - 1; i >= 0; i--) {
     const b = ebs[i];
@@ -121,7 +121,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
     }
   }
 
-  // Boss projectiles + boss body contact hitting the player.
   const bbs = activeBossBullets();
   for (let i = bbs.length - 1; i >= 0; i--) {
     const b = bbs[i];
@@ -137,7 +136,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
     }
   }
 
-  // Player-sprite flash while invincible so the safe window is readable (M.1).
   if (player.sprite && player.sprite.mesh) {
     player.sprite.mesh.visible =
       player.iframe > 0 ? Math.floor(player.iframe * 10) % 2 === 0 : true;
@@ -146,7 +144,6 @@ export function updateCombat(dt, player, onKill, onLifeLost) {
   updateFloaters(dt);
 }
 
-// --- floating damage numbers ---
 function spawnFloater(x, z, amount) {
   const el = document.createElement("div");
   el.className = "floater";
@@ -164,16 +161,14 @@ function updateFloaters(dt) {
       floaters.splice(i, 1);
       continue;
     }
-    // Drift upward in world space as it ages.
     const t = 1 - f.life / FLOATER_LIFE;
     f.y = 0.5 + FLOATER_RISE * t;
 
-    // Project world position -> normalized device coords -> screen pixels.
     const v = new THREE.Vector3(f.x, f.y, f.z).project(camera);
     const sx = (v.x * 0.5 + 0.5) * innerWidth;
     const sy = (-v.y * 0.5 + 0.5) * innerHeight;
     f.el.style.left = sx + "px";
     f.el.style.top = sy + "px";
-    f.el.style.opacity = String(Math.min(1, f.life / 0.3)); // fade last 0.3s
+    f.el.style.opacity = String(Math.min(1, f.life / 0.3));
   }
 }

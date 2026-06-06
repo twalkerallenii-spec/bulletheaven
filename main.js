@@ -6,6 +6,7 @@ import { initEnemies, updateEnemies, activeEnemies, getKills } from "./enemies.j
 import { initProjectiles, updateProjectiles } from "./projectiles.js";
 import { makeWeapon, updateWeapons } from "./weapons.js";
 import { initCombat, updateCombat } from "./combat.js";
+import { initEffects, updateEffects } from "./effects.js";
 import {
   initMathMoments,
   runLevelUp,
@@ -43,11 +44,12 @@ let state = STATES.RUN;
 // --- boot ---
 const { scene, camera, renderer } = makeScene();
 const player = makePlayer(scene);
-player.weapons.push(makeWeapon("pistol")); // starting kit (design §14)
+player.weapons.push(makeWeapon("pistol"));
 
 initProjectiles(scene);
 initEnemies(scene);
 initCombat(camera);
+initEffects(scene);
 initPickups(scene);
 initProps(scene);
 initBosses(scene);
@@ -59,12 +61,8 @@ initHUD();
 const mastery = loadMastery();
 initMathMoments({
   facts: mastery.facts,
-  enterState: (s) => {
-    state = s;
-  },
-  resume: () => {
-    state = STATES.RUN;
-  },
+  enterState: (s) => { state = s; },
+  resume: () => { state = STATES.RUN; },
 });
 
 let levelUpPending = false;
@@ -74,9 +72,7 @@ function onXPGained(amount) {
     player.xp -= player.xpToNext;
     player.xpToNext = Math.round(player.xpToNext * CONFIG.xpGrowth);
     levelUpPending = true;
-    runLevelUp(player).finally(() => {
-      levelUpPending = false;
-    });
+    runLevelUp(player).finally(() => { levelUpPending = false; });
   }
 }
 
@@ -90,12 +86,8 @@ const PICKUP_RANGE = CONFIG.basePickupRange;
 const PICKUP_FLY = CONFIG.pickupFlySpeed;
 const pickupCallbacks = {
   onXp: (amt) => onXPGained(amt),
-  onTime: (amt) => {
-    run.timeEarned += amt;
-  },
-  get pickupRange() {
-    return PICKUP_RANGE * (1 + player.stats.pickupRange);
-  },
+  onTime: (amt) => { run.timeEarned += amt; },
+  get pickupRange() { return PICKUP_RANGE * (1 + player.stats.pickupRange); },
   flySpeed: PICKUP_FLY,
 };
 
@@ -109,12 +101,8 @@ function onLifeLost() {
       player.hp = player.maxHp;
       player.iframe = CONFIG.iframeDuration * 3;
     },
-    onFail: () => {
-      state = STATES.GAMEOVER;
-    },
-  }).finally(() => {
-    respawnPending = false;
-  });
+    onFail: () => { state = STATES.GAMEOVER; },
+  }).finally(() => { respawnPending = false; });
 }
 
 let decisionTimer = randDecisionInterval();
@@ -196,6 +184,7 @@ function update(dt) {
   updateWeapons(dt, player);
   updateProjectiles(dt);
   updateCombat(dt, player, onKill, onLifeLost);
+  updateEffects(dt); // animate impact bursts
   updatePickups(dt, player, pickupCallbacks);
   updateProps(player);
   tickDecisionClock(dt);
@@ -203,7 +192,7 @@ function update(dt) {
 }
 
 function render() {
-  updateCamera(camera, player.position, scene); // scene -> ground follows player
+  updateCamera(camera, player.position, scene);
   renderer.render(scene, camera);
   updateHUD(player, run, activeBoss());
   updateDebug();
