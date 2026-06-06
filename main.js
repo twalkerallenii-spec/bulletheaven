@@ -47,7 +47,6 @@ initEnemies(scene);
 import { initProps } from "./props.js";
 initProps(scene);
 initPickups(scene);
-initProps(scene);
 initBosses(scene);
 
 const run = { timeEarned: 0, elapsed: 0 };
@@ -95,7 +94,7 @@ function onLifeLost() {
       player.hp = player.maxHp;
       player.iframe = CONFIG.iframeDuration * 3;
     },
-    onFail: () => { state = STATES.GAMEOVER; },
+    () => { state = STATES.GAMEOVER; }
   ).finally(() => { respawnPending = false; });
 }
 
