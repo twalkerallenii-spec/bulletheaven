@@ -21,6 +21,7 @@ const sources = [
   { name: "sprites.js", path: "./sprites.js", key: "SPRITES" },
   { name: "world-sprites.js", path: "./world-sprites.js", key: "WORLD_SPRITES" },
   { name: "bullet-sprites.js", path: "./bullet-sprites.js", key: "BULLET_SPRITES" },
+  { name: "cog-sprites.js", path: "./cog-sprites.js", key: "COG_SPRITES" },
 ];
 
 await Promise.allSettled(
@@ -80,14 +81,16 @@ function makeShapeFallback(kind) {
 }
 
 // ---- PRIMARY: frame array -> crisp CanvasTexture (design O.3) ----
-function frameToTexture(frame, size) {
+// Supports non-square sprites: `w` columns x `h` rows. Square callers pass the
+// same value for both.
+function frameToTexture(frame, w, h = w) {
   const cv = document.createElement("canvas");
-  cv.width = size;
-  cv.height = size;
+  cv.width = w;
+  cv.height = h;
   const ctx = cv.getContext("2d");
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const c = frame[y * size + x];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = frame[y * w + x];
       if (c) {
         ctx.fillStyle = c;
         ctx.fillRect(x, y, 1, 1);
@@ -128,9 +131,12 @@ export function makeSprite(kind) {
   const asset = SPRITES[kind];
   if (!asset) return makeShapeFallback(kind);
 
+  const w = asset.size;
+  const h = asset.sizeY || asset.size; // non-square sprites (e.g. 16x32 enemies)
+
   const textures = asset.frames
     .filter((f) => f.some((px) => px !== null))
-    .map((f) => frameToTexture(f, asset.size));
+    .map((f) => frameToTexture(f, w, h));
 
   if (textures.length === 0) return makeShapeFallback(kind);
 
@@ -138,9 +144,15 @@ export function makeSprite(kind) {
   const mesh = new THREE.Sprite(mat);
 
   const profile = PROP_PROFILE[kind];
-  const s = profile ? profile.scale : SIZE_BY_TYPE[asset.type] ?? 1.4;
-  mesh.scale.set(s, s, 1);
-  const anchorY = profile ? profile.anchor : 0.1;
+  // base world size for the SHORT side; the long side scales by aspect so the
+  // sprite isn't squashed. A 16x32 enemy at base 1.4 is 1.4 wide, 2.8 tall.
+  const baseShort = profile ? profile.scale : SIZE_BY_TYPE[asset.type] ?? 1.4;
+  const aspect = h / w;
+  mesh.scale.set(baseShort, baseShort * aspect, 1);
+
+  // Anchor: props/enemies stand on the ground (feet near the bottom). For tall
+  // sprites this matters even more so they don't sink/float.
+  const anchorY = profile ? profile.anchor : 0.08;
   mesh.center.set(0.5, anchorY);
 
   return {
