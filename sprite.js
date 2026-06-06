@@ -104,25 +104,26 @@ function frameToTexture(frame, w, h = w) {
 }
 
 const SIZE_BY_TYPE = {
-  hero: 1.6,
+  hero: 1.7,   // Knight (32x32) — reads a touch bigger than enemies
   enemy: 1.4,
   pickup: 0.8,
   prop: 1.6,
-  boss: 4.0,
+  boss: 4.2,   // Orc Warrior (32x32) towers over the 1.4 enemies
   projectile: 0.9,
 };
 
-// Per-asset world scale + ground anchor. Anchor y (0..1): 0.1 = feet near the
-// bottom (object stands on the ground), 0.5 = centered (flat ground detail).
+// Per-asset world scale + ground anchor. These are the SHORT-side world size;
+// makeSprite scales the long side by the sprite's aspect so nothing squashes.
+// Tuned for the Pixel Crawler props (trees ~48x96, rocks ~46px, bushes ~38px)
+// so a tree towers over the ~1.4-unit characters and a pebble sits underfoot.
 const PROP_PROFILE = {
-  prop_tree:    { scale: 3.2, anchor: 0.06 },
-  prop_pine:    { scale: 3.2, anchor: 0.06 },
-  prop_bush:    { scale: 1.5, anchor: 0.12 },
-  prop_stone:   { scale: 1.0, anchor: 0.15 },
-  prop_pebbles: { scale: 0.9, anchor: 0.2 },
-  prop_grass:   { scale: 1.1, anchor: 0.2 },
-  prop_flower:  { scale: 1.0, anchor: 0.2 },
-  prop_flower2: { scale: 1.0, anchor: 0.2 },
+  prop_tree:    { scale: 2.6, anchor: 0.04 }, // 48x96 -> ~2.6 wide, ~5.2 tall
+  prop_pine:    { scale: 2.6, anchor: 0.04 },
+  prop_bush:    { scale: 1.5, anchor: 0.1 },
+  prop_stone:   { scale: 1.3, anchor: 0.12 },
+  prop_pebbles: { scale: 0.8, anchor: 0.18 },
+  prop_grass:   { scale: 0.9, anchor: 0.2 },
+  prop_flower:  { scale: 0.9, anchor: 0.2 },
   prop_house:   { scale: 3.6, anchor: 0.06 },
   prop_castle:  { scale: 4.4, anchor: 0.05 },
 };

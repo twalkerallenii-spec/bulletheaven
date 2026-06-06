@@ -29,18 +29,18 @@ const matXpFallback = new THREE.MeshBasicMaterial({ color: 0x69f0ae });
 let coinAvailable = false;
 
 function makeGem() {
-  // A pooled pickup holds BOTH a disc mesh (fallback / Time) and, lazily, a
-  // coin sprite for XP. We show whichever matches the pickup's kind.
+  // A pooled pickup holds a disc mesh (fallback) and, when coin art exists, a
+  // coin sprite. Both XP and Time render the spinning coin (the disc is only a
+  // fallback if the coin sprite failed to load).
   const disc = new THREE.Mesh(gemGeo, matXpFallback);
   disc.rotation.x = -Math.PI / 2;
   disc.visible = false;
 
-  // coin sprite (billboard) — created once per pooled slot if coin art exists
   let coin = null;
   if (coinAvailable) {
     coin = makeSprite("xp_gem"); // {mesh, textures, setFrame}
     coin.mesh.visible = false;
-    coin.mesh.scale.set(0.7, 0.7, 1); // coin reads a touch smaller than a tree
+    coin.mesh.scale.set(0.7, 0.7, 1);
   }
 
   return {
@@ -64,7 +64,8 @@ export function initPickups(sceneRef) {
   }
 }
 
-// Drop a pickup at (x,z). kind is "xp" or "time".
+// Drop a pickup at (x,z). kind is "xp" or "time". Both render the spinning
+// coin; Time coins are tinted gold so the two currencies read distinctly.
 export function spawnPickup(x, z, kind, amount) {
   const g = free.pop();
   if (!g) return null;
@@ -73,31 +74,29 @@ export function spawnPickup(x, z, kind, amount) {
   g.active = true;
   g.animT = 0;
 
-  if (kind === "time") {
-    g.disc.material = matTime;
+  if (g.coin) {
+    // both XP and Time use the coin sprite
+    g.coin.mesh.visible = true;
+    g.coin.mesh.position.set(x, 0.12, z);
+    g.coin.setFrame(0);
+    // tint: XP neutral (true coin color), Time a warmer gold so they differ
+    if (g.coin.mesh.material) {
+      g.coin.mesh.material.color.setHex(kind === "time" ? 0xffcf4d : 0xffffff);
+    }
+    g.disc.visible = false;
+  } else {
+    // no coin art -> colored-disc fallback (green XP / gold Time)
+    g.disc.material = kind === "time" ? matTime : matXpFallback;
     g.disc.visible = true;
     g.disc.position.set(x, 0.04, z);
-    if (g.coin) g.coin.mesh.visible = false;
-  } else {
-    // XP -> coin sprite if available, else green disc
-    if (g.coin) {
-      g.coin.mesh.visible = true;
-      g.coin.mesh.position.set(x, 0.12, z); // sits just above the ground
-      g.coin.setFrame(0);
-      g.disc.visible = false;
-    } else {
-      g.disc.material = matXpFallback;
-      g.disc.visible = true;
-      g.disc.position.set(x, 0.04, z);
-    }
   }
   active.push(g);
   return g;
 }
 
 function pos(g) {
-  // the visible mesh's position (coin if XP+coin, else disc)
-  return g.kind === "xp" && g.coin ? g.coin.mesh.position : g.disc.position;
+  // the visible mesh's position (coin when coin art exists, else disc)
+  return g.coin ? g.coin.mesh.position : g.disc.position;
 }
 
 function release(g) {
@@ -121,8 +120,8 @@ export function updatePickups(dt, player, { onXp, onTime, pickupRange, flySpeed 
     const dz = p.z - gp.z;
     const dist = Math.hypot(dx, dz) || 1;
 
-    // animate the coin spin
-    if (g.kind === "xp" && g.coin) {
+    // animate the coin spin (both XP and Time use the coin sprite)
+    if (g.coin) {
       g.animT += dt;
       g.coin.setFrame(Math.floor(g.animT * COIN_FPS));
     }

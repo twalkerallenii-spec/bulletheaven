@@ -11,11 +11,11 @@
 
 import { makeSprite } from "./sprite.js";
 
-// Weighted prop table — higher weight = more common.
+// Weighted prop table — higher weight = more common. Uses the Pixel Crawler
+// prop set (trees, bush, rocks, grass, flowers).
 const PROP_TABLE = [
   ["prop_grass", 11],
-  ["prop_flower", 4],
-  ["prop_flower2", 3],
+  ["prop_flower", 5],
   ["prop_bush", 6],
   ["prop_pebbles", 4],
   ["prop_stone", 3],
@@ -25,7 +25,9 @@ const PROP_TABLE = [
 const WEIGHTED = [];
 for (const [kind, w] of PROP_TABLE) for (let i = 0; i < w; i++) WEIGHTED.push(kind);
 
+// Trees/bushes/stones cluster into groves.
 const CLUSTERERS = new Set(["prop_tree", "prop_pine", "prop_bush", "prop_stone"]);
+const LANDMARKS = new Set(); // none in this pack
 
 const TARGET_COUNT = 200; // dense, populated world (Image-3 density)
 const SPAWN_MIN = 8;  // reach close to the player so it's never bare nearby
@@ -61,18 +63,22 @@ function placeProp(playerPos) {
   const x = playerPos.x + Math.cos(a) * r;
   const z = playerPos.z + Math.sin(a) * r;
 
-  // keep a small clear bubble around the player so structure props don't spawn
-  // right on them (grass/flowers are fine close, they're flat detail)
+  // keep a clear bubble around the player so structure/landmark props don't
+  // spawn on them (grass/flowers are fine close — flat detail). Landmarks need
+  // a bigger berth since they're large.
+  const needsClearance = CLUSTERERS.has(kind) || LANDMARKS.has(kind);
+  const bubble = LANDMARKS.has(kind) ? CLEAR_RADIUS * 2.5 : CLEAR_RADIUS;
   if (
-    CLUSTERERS.has(kind) &&
-    Math.hypot(x - playerPos.x, z - playerPos.z) < CLEAR_RADIUS
+    needsClearance &&
+    Math.hypot(x - playerPos.x, z - playerPos.z) < bubble
   ) {
     return;
   }
 
   addProp(kind, x, z);
 
-  // Cluster into groves for that gathered, forest-y look.
+  // Cluster into groves for that gathered, forest-y look (landmarks stand
+  // alone — no grove around a house/castle).
   if (CLUSTERERS.has(kind) && Math.random() < 0.7) {
     const n = 3 + ((Math.random() * 4) | 0); // 3–6 extra
     for (let i = 0; i < n && props.length < TARGET_COUNT + 20; i++) {

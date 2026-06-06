@@ -4,18 +4,23 @@
 // math-moment flow; this module owns the boss entity, its phases and attacks,
 // and the pre-boss weapon's effect (removes 1/4 max HP on hit).
 //
-// Slice scope: one active boss at a time (the Chrono Dragon), spawned by the
-// threat clock in main.js. Roster data from I.3; patterns kept simple but real.
+// The active boss is the Orc Warrior (Pixel Crawler sprite). It fires rings of
+// the purple themed bullet sprites (the user's Effect_and_Bullet art) so its
+// attacks read as menacing magic bolts, not plain discs.
 
 import { makeSprite } from "./sprite.js";
 import { CONFIG } from "./config.js";
 
 export const BOSSES = {
-  chronodragon: { name: "Chrono Dragon", op: "div", maxHp: 1200, asset: "boss_dragon" },
+  chronodragon: { name: "Orc Warlord", op: "div", maxHp: 1200, asset: "boss_dragon" },
 };
 
+// Which bullet sprite the boss fires (purple = menacing). Falls back to a disc
+// in sprite.js if the bullet art isn't loaded.
+const BOSS_BULLET = "bullet_purple_orb_small";
+
 let scene = null;
-let boss = null; // the single active boss, or null
+let boss = null;
 let bossBullets = [];
 
 export function initBosses(sceneRef) {
@@ -25,7 +30,6 @@ export function initBosses(sceneRef) {
 export function spawnBoss(id, playerPos) {
   const def = BOSSES[id] || BOSSES.chronodragon;
   const sprite = makeSprite(def.asset);
-  // appear off to one side of the player
   const a = Math.random() * Math.PI * 2;
   const x = playerPos.x + Math.cos(a) * 16;
   const z = playerPos.z + Math.sin(a) * 16;
@@ -42,24 +46,19 @@ export function spawnBoss(id, playerPos) {
     phase: 1,
     fireCooldown: 1.5,
     animTimer: 0,
-    prebossPending: true, // the single-use pre-boss weapon hasn't landed yet
+    prebossPending: true,
   };
   return boss;
 }
 
-export function activeBoss() {
-  return boss;
-}
-export function activeBossBullets() {
-  return bossBullets;
-}
+export function activeBoss() { return boss; }
+export function activeBossBullets() { return bossBullets; }
 export function removeBossBullet(b) {
   scene.remove(b.mesh);
   const i = bossBullets.indexOf(b);
   if (i >= 0) bossBullets.splice(i, 1);
 }
 
-// The pre-boss weapon connecting: removes exactly 1/4 of max HP, once (§18).
 export function prebossHit() {
   if (!boss || !boss.prebossPending) return;
   boss.hp -= boss.maxHp * 0.25;
@@ -76,9 +75,10 @@ function phaseFor(hp, maxHp) {
 function fireRadial(x, z, count, speed) {
   for (let i = 0; i < count; i++) {
     const ang = (i / count) * Math.PI * 2;
-    const shot = makeSprite("ranged_shot");
+    // fire the themed bullet sprite (purple bolt) instead of a plain disc
+    const shot = makeSprite(BOSS_BULLET);
     shot.mesh.position.set(x, 0.06, z);
-    if (shot.mesh.scale) shot.mesh.scale.set(0.7, 0.7, 1);
+    if (shot.mesh.scale) shot.mesh.scale.set(1.0, 1.0, 1);
     scene.add(shot.mesh);
     bossBullets.push({
       mesh: shot.mesh,
@@ -91,7 +91,6 @@ function fireRadial(x, z, count, speed) {
   }
 }
 
-// Returns "defeated" once the boss dies (caller grants rewards + clears).
 export function updateBoss(dt, player, onDefeat) {
   if (boss) {
     const bp = boss.sprite.mesh.position;
@@ -100,14 +99,11 @@ export function updateBoss(dt, player, onDefeat) {
     const dz = p.z - bp.z;
     const dist = Math.hypot(dx, dz) || 1;
 
-    // slow relentless approach
     bp.x += (dx / dist) * boss.speed * dt;
     bp.z += (dz / dist) * boss.speed * dt;
 
-    // phase transitions by HP third (pattern-only, §18)
     boss.phase = phaseFor(boss.hp, boss.maxHp);
 
-    // attack cadence quickens each phase
     boss.fireCooldown -= dt;
     if (boss.fireCooldown <= 0) {
       const phaseCfg = {
@@ -130,7 +126,6 @@ export function updateBoss(dt, player, onDefeat) {
     }
   }
 
-  // advance boss bullets
   for (let i = bossBullets.length - 1; i >= 0; i--) {
     const b = bossBullets[i];
     b.mesh.position.x += b.vx * dt;
@@ -143,7 +138,6 @@ export function updateBoss(dt, player, onDefeat) {
   }
 }
 
-// Clear any boss state (e.g. on run reset).
 export function clearBoss() {
   if (boss) scene.remove(boss.sprite.mesh);
   boss = null;
