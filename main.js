@@ -24,6 +24,7 @@ import {
   activeBoss,
   prebossHit,
 } from "./bosses.js";
+import { initProps, updateProps } from "./props.js";
 
 const STATES = {
   MENU: "menu",
@@ -44,7 +45,6 @@ player.weapons.push(makeWeapon("pistol"));
 
 initProjectiles(scene);
 initEnemies(scene);
-import { initProps } from "./props.js";
 initProps(scene);
 initPickups(scene);
 initBosses(scene);
@@ -78,9 +78,10 @@ function onKill(enemy, x, z) {
 }
 
 const pickupCallbacks = {
-  onXP: onXPGained,
+  onXp: onXPGained,
   onTime: (sec) => { run.timeEarned += sec; },
-  flySpeed: PICKUP_FLY,
+  flySpeed: CONFIG.pickupFlySpeed,
+  pickupRange: CONFIG.basePickupRange,
 };
 
 let respawnPending = false;
