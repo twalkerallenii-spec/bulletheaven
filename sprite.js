@@ -17,31 +17,42 @@ let SPRITES = {};
 // Load each source on its own. Promise.allSettled so a rejection in one doesn't
 // abort the other (the previous version's single try/catch around both was the
 // bug: one bad import blanked EVERY sprite).
+// Source order = priority. Earlier = base, later = override. The original
+// hand-drawn sprites.js is the BASE; the asset packs layered after it override
+// by key (so cog-sprites.js's orc/blob/skeleton replace the old hand-drawn
+// chaser/swarmer/ranged, world-sprites.js's hero/boss/props win, etc.).
 const sources = [
-  { name: "sprites.js", path: "./sprites.js", key: "SPRITES" },
-  { name: "world-sprites.js", path: "./world-sprites.js", key: "WORLD_SPRITES" },
+  { name: "sprites.js", path: "./sprites.js", key: "SPRITES" },        // base (hand-drawn)
   { name: "bullet-sprites.js", path: "./bullet-sprites.js", key: "BULLET_SPRITES" },
-  { name: "cog-sprites.js", path: "./cog-sprites.js", key: "COG_SPRITES" },
-  { name: "comet-sprites.js", path: "./comet-sprites.js", key: "COMET_SPRITES" },
+  { name: "cog-sprites.js", path: "./cog-sprites.js", key: "COG_SPRITES" },   // enemies + coin (override)
+  { name: "world-sprites.js", path: "./world-sprites.js", key: "WORLD_SPRITES" }, // hero/boss/props (override)
+  { name: "comet-sprites.js", path: "./comet-sprites.js", key: "COMET_SPRITES" }, // bullets
 ];
 
-await Promise.allSettled(
-  sources.map(async (s) => {
-    try {
-      const mod = await import(s.path);
-      const data = mod[s.key];
-      if (data && typeof data === "object") {
-        const n = Object.keys(data).length;
-        SPRITES = { ...SPRITES, ...data };
-        console.info(`[sprite] loaded ${n} sprites from ${s.name}`);
-      } else {
-        console.warn(`[sprite] ${s.name} loaded but has no ${s.key} export`);
-      }
-    } catch (e) {
-      console.warn(`[sprite] could not load ${s.name} (${e.message}); those assets fall back to discs.`);
-    }
-  })
+// Load all in parallel, but MERGE IN ARRAY ORDER after settling — NOT in
+// completion order. (Previous bug: merging inside the map meant whichever file
+// finished downloading last won, so the big sprites.js clobbered the enemy pack
+// that had loaded first. Enemies reverted to the old hand-drawn art.)
+const results = await Promise.allSettled(
+  sources.map((s) => import(s.path).then((mod) => ({ s, data: mod[s.key] })))
 );
+
+for (let i = 0; i < sources.length; i++) {
+  const r = results[i];
+  const s = sources[i];
+  if (r.status === "rejected") {
+    console.warn(`[sprite] could not load ${s.name} (${r.reason?.message || r.reason}); those assets fall back to discs.`);
+    continue;
+  }
+  const data = r.value.data;
+  if (data && typeof data === "object") {
+    const n = Object.keys(data).length;
+    SPRITES = { ...SPRITES, ...data }; // later sources override earlier by key
+    console.info(`[sprite] loaded ${n} sprites from ${s.name}`);
+  } else {
+    console.warn(`[sprite] ${s.name} loaded but has no ${s.key} export`);
+  }
+}
 
 console.info(`[sprite] total sprites available: ${Object.keys(SPRITES).length}`, Object.keys(SPRITES));
 
