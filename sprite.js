@@ -166,10 +166,63 @@ export function makeSprite(kind) {
   };
 }
 
-// Bullet textures: the projectile pool maps these onto flat planes. Returns a
-// crisp CanvasTexture for a named bullet sprite, or null if the sprite isn't
-// loaded (caller then uses a plain colored disc). Cached so repeated bullets of
-// the same kind share one texture (keeps GPU memory + draw setup low).
+// Directional/stateful sprite: one mesh that can switch between several named
+// animation clips (e.g. "run_down", "idle_left"). Builds and caches each clip's
+// textures once, then swaps the active clip on demand. Used by the player so it
+// faces the way it walks and only animates while moving.
+//
+// `clips` maps a state name -> sprite asset key in SPRITES, e.g.
+//   { run_down:"hero_run_down", idle_down:"hero_idle_down", ... }
+// Returns { mesh, setClip(name), setFrame(i), kind }.
+export function makeDirectionalSprite(clips, { type = "hero" } = {}) {
+  const built = {}; // name -> { textures, w, h }
+  let firstKey = null;
+  for (const [state, assetKey] of Object.entries(clips)) {
+    const asset = SPRITES[assetKey];
+    if (!asset) continue;
+    const w = asset.size;
+    const h = asset.sizeY || asset.size;
+    const textures = asset.frames
+      .filter((f) => f.some((px) => px !== null))
+      .map((f) => frameToTexture(f, w, h));
+    if (textures.length === 0) continue;
+    built[state] = { textures, w, h };
+    if (!firstKey) firstKey = state;
+  }
+
+  // nothing loaded -> colored disc fallback so movement still works
+  if (!firstKey) {
+    const fb = makeShapeFallback("hero");
+    return { mesh: fb.mesh, kind: "hero", setClip() {}, setFrame() {} };
+  }
+
+  const start = built[firstKey];
+  const mat = new THREE.SpriteMaterial({ map: start.textures[0], transparent: true });
+  const mesh = new THREE.Sprite(mat);
+
+  const baseShort = SIZE_BY_TYPE[type] ?? 1.6;
+  const aspect = start.h / start.w; // all hero clips share dimensions
+  mesh.scale.set(baseShort, baseShort * aspect, 1);
+  mesh.center.set(0.5, 0.1); // feet near the bottom
+
+  let active = firstKey;
+  return {
+    mesh,
+    kind: "hero",
+    setClip(name) {
+      if (name === active || !built[name]) return;
+      active = name;
+      mat.map = built[name].textures[0];
+    },
+    setFrame(i) {
+      const clip = built[active];
+      if (clip && clip.textures.length > 1) {
+        mat.map = clip.textures[i % clip.textures.length];
+      }
+    },
+    currentClip() { return active; },
+  };
+}
 const bulletTexCache = new Map();
 export function bulletTexture(name) {
   if (bulletTexCache.has(name)) return bulletTexture._get(name);

@@ -1,64 +1,107 @@
-// player.js — the player entity: movement, health, XP, weapon/passive slots.
-// Slice scope: movement is live; the rest of the struct is defined per design
-// (Appendix A.4 weapons, M.1 health/iframes) so later systems have a home.
+// player.js — the hero: movement, health, XP, weapon/passive slots, and a
+// DIRECTIONAL animated sprite wired to WASD/arrow input. The sprite faces the
+// way you walk (down/up/left/right) and only plays its run animation while
+// moving; standing still shows the idle clip for the current facing.
+//
+// Self-contained input: this module installs its own key listeners and exposes
+// the resulting movement through updatePlayer. main.js only calls
+// makePlayer(scene) and updatePlayer(player, dt).
 
-import { makeSprite } from "./sprite.js";
-import { getMoveVector } from "./input.js";
+import * as THREE from "three";
+import { makeDirectionalSprite } from "./sprite.js";
 import { CONFIG } from "./config.js";
 
-const PLAYER_SPEED = 8; // world units / second (tune in config.js later)
+// ---- input: WASD + arrows -> a movement vector ----
+const keys = Object.create(null);
+addEventListener("keydown", (e) => {
+  keys[e.code] = true;
+});
+addEventListener("keyup", (e) => {
+  keys[e.code] = false;
+});
+// release everything if the tab loses focus (avoids "stuck" movement)
+addEventListener("blur", () => {
+  for (const k in keys) keys[k] = false;
+});
 
-export function makePlayer(scene, classStats = { hp: 100, speed: 1.0 }) {
-  // "hero_frog" is the SpudMaker asset (green frog-knight); falls back to a
-  // light-blue disc until sprites.js exists.
-  const sprite = makeSprite("hero_frog");
-  sprite.mesh.position.set(0, 0.02, 0); // just above the ground plane
+function moveVector() {
+  let x = 0;
+  let z = 0;
+  if (keys.KeyW || keys.ArrowUp) z -= 1;
+  if (keys.KeyS || keys.ArrowDown) z += 1;
+  if (keys.KeyA || keys.ArrowLeft) x -= 1;
+  if (keys.KeyD || keys.ArrowRight) x += 1;
+  return { x, z };
+}
+
+const BASE_SPEED = 6; // world units / second (before speedMult)
+
+export function makePlayer(scene) {
+  // directional clips -> sprite asset keys (sliced into world-sprites.js)
+  const sprite = makeDirectionalSprite(
+    {
+      run_down: "hero_run_down",
+      run_up: "hero_run_up",
+      run_left: "hero_run_left",
+      run_right: "hero_run_right",
+      idle_down: "hero_idle_down",
+      idle_up: "hero_idle_up",
+      idle_left: "hero_idle_left",
+      idle_right: "hero_idle_right",
+    },
+    { type: "hero" }
+  );
+  sprite.mesh.position.set(0, 0.05, 0);
   scene.add(sprite.mesh);
+
+  const maxHp = CONFIG.playerMaxHpBase ?? 100;
 
   return {
     sprite,
-    // --- transform ---
-    get position() {
-      return sprite.mesh.position;
-    },
-    // --- health (M.1) ---
-    hp: classStats.hp,
-    maxHp: classStats.hp,
-    iframe: 0, // seconds of invincibility remaining
-    lives: 3, // design §13
-    // --- progression (A.2 / loop) ---
+    position: sprite.mesh.position, // {x,y,z}; combat/camera read .x/.z
+    hp: maxHp,
+    maxHp,
+    lives: CONFIG.startingLives ?? 3,
+    iframe: 0,
     xp: 0,
     level: 1,
-    xpToNext: CONFIG.xpBase, // grows each level (D.4)
-    // --- build (A.4) ---
-    speedMult: classStats.speed,
-    weapons: [], // live weapon instances
-    passives: [], // accumulated passive items
-    stats: { pickupRange: 0 }, // recomputed from passives (N.3/N.4)
-    // Combat modifiers (multipliers) adjusted by upgrades, read at fire time.
-    // 1.0 = unmodified. Stat-up upgrades raise these; weapons compute
-    // effective values as base * mod (predictable stacking).
-    mods: {
-      damage: 1.0, // bullet damage multiplier
-      fireRate: 1.0, // higher = faster (shorter interval)
-      projectileSpeed: 1.0,
-    },
-    animTimer: 0,
+    xpToNext: CONFIG.xpBase ?? 25,
+    speedMult: 1,
+    weapons: [],
+    // upgrade modifiers (weapons.js reads these; upgrades.js writes them)
+    mods: { damage: 0, fireRate: 0, projectileSpeed: 0 },
+    stats: { pickupRange: 0 },
+    // animation bookkeeping
+    facing: "down",
+    animTime: 0,
   };
 }
 
 export function updatePlayer(player, dt) {
-  const dir = getMoveVector();
-  const speed = PLAYER_SPEED * player.speedMult;
-  player.position.x += dir.x * speed * dt;
-  player.position.z += dir.z * speed * dt;
+  const mv = moveVector();
+  const moving = mv.x !== 0 || mv.z !== 0;
 
-  // i-frame countdown (no damage yet in the slice, but keep the tick honest).
-  if (player.iframe > 0) {
-    player.iframe = Math.max(0, player.iframe - dt);
+  if (moving) {
+    // normalize so diagonals aren't faster
+    const len = Math.hypot(mv.x, mv.z) || 1;
+    const speed = BASE_SPEED * (player.speedMult || 1);
+    player.position.x += (mv.x / len) * speed * dt;
+    player.position.z += (mv.z / len) * speed * dt;
+
+    // pick facing from the dominant axis (favor left/right on ties so
+    // side-running reads well)
+    if (Math.abs(mv.x) >= Math.abs(mv.z)) {
+      player.facing = mv.x < 0 ? "left" : "right";
+    } else {
+      player.facing = mv.z < 0 ? "up" : "down";
+    }
   }
 
-  // Animation tick — no-op for the disc fallback, real once sprites load.
-  player.animTimer += dt;
-  player.sprite.setFrame(Math.floor(player.animTimer * 3));
+  // drive the sprite: run clip while moving, idle clip when still
+  const clip = (moving ? "run_" : "idle_") + player.facing;
+  player.sprite.setClip(clip);
+
+  // advance animation frames; run faster than idle so the walk reads as brisk
+  player.animTime += dt * (moving ? 10 : 4);
+  player.sprite.setFrame(Math.floor(player.animTime));
 }
