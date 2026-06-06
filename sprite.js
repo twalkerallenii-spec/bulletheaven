@@ -22,6 +22,7 @@ const sources = [
   { name: "world-sprites.js", path: "./world-sprites.js", key: "WORLD_SPRITES" },
   { name: "bullet-sprites.js", path: "./bullet-sprites.js", key: "BULLET_SPRITES" },
   { name: "cog-sprites.js", path: "./cog-sprites.js", key: "COG_SPRITES" },
+  { name: "comet-sprites.js", path: "./comet-sprites.js", key: "COMET_SPRITES" },
 ];
 
 await Promise.allSettled(
@@ -231,11 +232,24 @@ export function bulletTexture(name) {
     bulletTexCache.set(name, null);
     return null;
   }
-  const tex = frameToTexture(asset.frames[0], asset.size);
+  // pass width AND height so non-square bullets (e.g. wide comet streaks) keep
+  // their aspect instead of being squashed into a square texture
+  const w = asset.size;
+  const h = asset.sizeY || asset.size;
+  const tex = frameToTexture(asset.frames[0], w, h);
   bulletTexCache.set(name, tex);
   return tex;
 }
 bulletTexture._get = (name) => bulletTexCache.get(name);
+
+// Aspect (height/width) of a bullet sprite, so the projectile mesh can match
+// the texture's proportions. 1 for square/unknown.
+export function bulletAspect(name) {
+  const asset = SPRITES[name];
+  if (!asset) return 1;
+  const w = asset.size, h = asset.sizeY || asset.size;
+  return h / w;
+}
 
 // Is a given bullet sprite available? (lets weapons fall back gracefully)
 export function hasBulletSprite(name) {

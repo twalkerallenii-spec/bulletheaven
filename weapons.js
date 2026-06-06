@@ -96,10 +96,23 @@ function fxThemeFromStyle(style) {
 export function makeWeapon(id) {
   const def = WEAPONS[id];
   const baseStyle = def.style || { color: 0xffee58, shape: "round", size: 1 };
-  // attach matching impact effects (spark on hit, shock on kill)
+  // theme drives both the comet bullet and the matching impact burst
   const theme = fxThemeFromStyle(baseStyle);
+  // FLASHY BULLETS: every weapon fires its themed plasma comet (a glowing
+  // tracer that streaks along travel). We preserve each weapon's size feel via
+  // a per-shape multiplier so heavy shots still look bigger than rapid ones.
+  const wasTracer = baseStyle.shape === "tracer";
+  const baseSize = baseStyle.size ?? 1;
   const style = {
     ...baseStyle,
+    sprite: `comet_${theme}`,
+    color: baseStyle.color, // fallback only if the comet fails to load
+    shape: "tracer",
+    // comets read big; scale down a touch, and give long-range/sniper shots a
+    // longer streak. Round-weapon comets get a modest streak, existing tracers
+    // a longer one.
+    size: baseSize * 0.9,
+    length: wasTracer ? (baseStyle.length ?? 2) : 1.4,
     fx: `fx_${theme}_spark`,
     fxKill: `fx_${theme}_shock`,
   };

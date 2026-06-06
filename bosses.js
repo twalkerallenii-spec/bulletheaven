@@ -15,9 +15,9 @@ export const BOSSES = {
   chronodragon: { name: "Orc Warlord", op: "div", maxHp: 1200, asset: "boss_dragon" },
 };
 
-// Which bullet sprite the boss fires (purple = menacing). Falls back to a disc
-// in sprite.js if the bullet art isn't loaded.
-const BOSS_BULLET = "bullet_purple_orb_small";
+// Which bullet sprite the boss fires (purple plasma comet = menacing + flashy).
+// Falls back to a disc in sprite.js if the art isn't loaded.
+const BOSS_BULLET = "comet_purple";
 
 let scene = null;
 let boss = null;

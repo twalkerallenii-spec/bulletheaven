@@ -13,7 +13,7 @@
 
 import * as THREE from "three";
 import { activeEnemies } from "./enemies.js";
-import { bulletTexture, hasBulletSprite } from "./sprite.js";
+import { bulletTexture, hasBulletSprite, bulletAspect } from "./sprite.js";
 
 const POOL_SIZE = 900;
 const BASE_HALF = 0.28; // half-size of a 1x bullet plane in world units
@@ -32,9 +32,20 @@ const texMatCache = new Map();
 function texMaterialFor(name) {
   if (texMatCache.has(name)) return texMatCache.get(name);
   const tex = bulletTexture(name);
-  const mat = tex
-    ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
-    : null;
+  let mat = null;
+  if (tex) {
+    // comets are glowing plasma — render them additively so the white-hot core
+    // and colored trail bloom against the world. Other textured bullets stay
+    // normal alpha. (Additive needs depthWrite off to layer correctly.)
+    const glow = name.startsWith("comet_");
+    mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+  }
   texMatCache.set(name, mat);
   return mat;
 }
@@ -93,7 +104,11 @@ function applyStyle(b, style) {
   b.mesh.material = mat;
 
   if (shape === "tracer") {
-    b.mesh.scale.set(size * length, size, 1);
+    // for textured streaks (comets), match the sprite's real aspect so it keeps
+    // its long shape; `length` still lets weapons exaggerate the streak.
+    const aspect = style?.sprite && hasBulletSprite(style.sprite)
+      ? bulletAspect(style.sprite) : 0.4;
+    b.mesh.scale.set(size * length, size * length * aspect, 1);
     b.radius = BASE_HALF * size;
     b.mesh.rotation.x = -Math.PI / 2;
   } else {
