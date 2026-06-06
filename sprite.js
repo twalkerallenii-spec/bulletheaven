@@ -104,7 +104,7 @@ function frameToTexture(frame, w, h = w) {
 }
 
 const SIZE_BY_TYPE = {
-  hero: 1.7,   // Knight (32x32) — reads a touch bigger than enemies
+  hero: 1.8,   // RPG adventurer (40x40) — reads a touch bigger than enemies
   enemy: 1.4,
   pickup: 0.8,
   prop: 1.6,
