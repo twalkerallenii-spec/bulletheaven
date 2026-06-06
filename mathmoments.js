@@ -3,10 +3,6 @@
 // All four share one pattern: FREEZE -> show modal -> capture keyboard answer
 // -> time it -> apply result -> resume. The modal is center-screen over a dark
 // overlay with the game frozen behind it (§16). Keyboard-only input.
-//
-// Slice scope (step 7a): Level-up is fully wired (it exercises selection,
-// difficulty bands, the modal, and keyboard capture — the most machinery).
-// Decision Phase / Respawn / Class Select reuse askProblem() and land next.
 
 import {
   ALL_KEYS,
@@ -26,9 +22,7 @@ import {
   applyChoice,
 } from "./upgrades.js";
 
-// The live mastery log (facts object). main.js loads it and passes it in.
 let masteryFacts = null;
-// Callbacks main.js wires so this module can freeze/resume the game.
 let onEnterState = null;
 let onResume = null;
 
@@ -39,14 +33,13 @@ export function initMathMoments({ facts, enterState, resume }) {
   buildModalDOM();
 }
 
-// ---- the shared modal (built once, shown/hidden per problem) ----
 let modalEl, problemEl, inputEl, feedbackEl, tagEl, timerEl;
 let answerCard, choiceCard, choiceRow;
 let resolveAnswer = null;
 let startedAt = 0;
 let answerTimer = null;
-let countdownRAF = null; // live countdown animation handle
-let countdownDeadline = 0; // performance.now() ms when time runs out
+let countdownRAF = null;
+let countdownDeadline = 0;
 
 function buildModalDOM() {
   modalEl = document.createElement("div");
@@ -78,27 +71,18 @@ function buildModalDOM() {
   choiceRow = modalEl.querySelector("#choice-row");
 
   inputEl.addEventListener("keydown", (e) => {
-    e.stopPropagation(); // don't let WASD-capture eat digits
+    e.stopPropagation();
     if (e.key === "Enter") {
       finish(inputEl.value);
       return;
     }
-    // Allow editing/navigation keys and shortcuts; block everything else
-    // that isn't a digit. Answers are always non-negative whole numbers.
     const allowed = [
-      "Backspace",
-      "Delete",
-      "ArrowLeft",
-      "ArrowRight",
-      "Home",
-      "End",
-      "Tab",
+      "Backspace", "Delete", "ArrowLeft", "ArrowRight", "Home", "End", "Tab",
     ];
     if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
-    if (!/^[0-9]$/.test(e.key)) e.preventDefault(); // not a digit -> reject
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
   });
 
-  // Safety net: scrub anything non-digit that still lands (paste, IME, etc).
   inputEl.addEventListener("input", () => {
     const cleaned = inputEl.value.replace(/[^0-9]/g, "");
     if (cleaned !== inputEl.value) inputEl.value = cleaned;
@@ -115,7 +99,6 @@ function showMathModal(key, tagText) {
   answerCard.style.display = "";
   choiceCard.style.display = "none";
   modalEl.classList.add("show");
-  // Focus after the show transition starts so the caret lands reliably.
   requestAnimationFrame(() => inputEl.focus());
 }
 
@@ -123,17 +106,14 @@ function hideMathModal() {
   modalEl.classList.remove("show");
 }
 
-// Present the 3 upgrade choices; resolves with the chosen choice object on
-// click. Each choice carries { upgradeId, diff, key } so the answer phase can
-// draw the right problem and apply the right upgrade.
-function presentChoices(choices) {
+function presentChoices(choices, player) {
   return new Promise((resolve) => {
     answerCard.style.display = "none";
     choiceCard.style.display = "";
     choiceRow.innerHTML = "";
 
     choices.forEach((c) => {
-      const d = describeChoice(c);
+      const d = describeChoice(c, player);
       const btn = document.createElement("button");
       btn.className = `choice diff-${c.diff}`;
       btn.innerHTML = `
@@ -149,12 +129,6 @@ function presentChoices(choices) {
   });
 }
 
-// Returns a Promise<{ correct, seconds, answer, correctAnswer }>.
-// Options:
-//   tag      — label shown above the problem
-//   deadline — absolute performance.now() ms; if passed, shows a live countdown
-//              and auto-fails (resolves with null) when reached. Shared across
-//              a multi-problem sequence (Respawn) so the 30s is total, not each.
 function askProblem(key, { tag = "", deadline = null } = {}) {
   return new Promise((resolve) => {
     const { op, a, b } = parseKey(key);
@@ -162,8 +136,6 @@ function askProblem(key, { tag = "", deadline = null } = {}) {
     startedAt = performance.now();
     showMathModal(key, tag);
 
-    // Live countdown (Respawn). Drives the timer text each frame; fires finish
-    // (null = fail) when the shared deadline passes.
     if (deadline) {
       countdownDeadline = deadline;
       timerEl.style.display = "block";
@@ -172,7 +144,7 @@ function askProblem(key, { tag = "", deadline = null } = {}) {
         if (remain <= 0) {
           timerEl.textContent = "0.0";
           stopCountdown();
-          finish(null); // out of time
+          finish(null);
           return;
         }
         timerEl.textContent = remain.toFixed(1);
@@ -189,7 +161,7 @@ function askProblem(key, { tag = "", deadline = null } = {}) {
       stopCountdown();
       const seconds = (performance.now() - startedAt) / 1000;
       const correct = typed !== null && Number(typed) === correctAnswer;
-      recordAnswer(masteryFacts, key, correct, seconds); // precious log
+      recordAnswer(masteryFacts, key, correct, seconds);
       resolve({ correct, seconds, answer: typed, correctAnswer });
     };
   });
@@ -202,27 +174,19 @@ function stopCountdown() {
   }
 }
 
-// Called on Enter (or timeout with null). Records + resolves the pending answer.
 function finish(typed) {
   if (!resolveAnswer) return;
   inputEl.disabled = true;
   const r = resolveAnswer;
   resolveAnswer = null;
-  r(typed); // resolves the askProblem() promise; caller handles feedback + resume
+  r(typed);
 }
 
 // ---- E.2 Level-up (XP fill; difficulty-tiered, 3 choices) ----
-// Offer 3 upgrades, one per difficulty (easy/medium/hard). The player picks
-// one, then answers a problem from that difficulty band. Correct -> full
-// boost; wrong -> a scaled-down boost (partial benefit, not nothing). Tier
-// only sets the SIZE of the stat jump (§19).
 export async function runLevelUp(player) {
   onEnterState("levelup");
   player.level += 1;
 
-  // Three distinct choices from the player's current pool (stat-ups, new
-  // weapons, weapon level-ups), each assigned a difficulty whose label matches
-  // the actual problem (no more "HARD 1+4").
   const diffs = ["easy", "medium", "hard"];
   const rolled = rollChoices(player, 3);
   const choices = rolled.map((c, i) => {
@@ -231,16 +195,13 @@ export async function runLevelUp(player) {
     return { ...c, diff, key };
   });
 
-  // Player picks one card.
-  const chosen = await presentChoices(choices);
+  const chosen = await presentChoices(choices, player);
 
-  // Answer the chosen card's problem.
-  const label = describeChoice(chosen).label.toUpperCase();
+  const label = describeChoice(chosen, player).label.toUpperCase();
   const { correct, correctAnswer } = await askProblem(chosen.key, {
     tag: `${label} · ${chosen.diff.toUpperCase()}`,
   });
 
-  // Apply: full effect on correct, scaled-down on a miss (E.2).
   applyChoice(player, chosen, chosen.diff, { missed: !correct });
 
   await flashFeedback(correct, correctAnswer);
@@ -249,7 +210,6 @@ export async function runLevelUp(player) {
   return { correct, choice: chosen };
 }
 
-// Brief on-card feedback, then a short pause. Encouraging on both paths (§16).
 function flashFeedback(correct, correctAnswer) {
   return new Promise((resolve) => {
     if (correct) {
@@ -264,19 +224,14 @@ function flashFeedback(correct, correctAnswer) {
 }
 
 // ---- E.1 Decision Phase (every 30–60s; speed-tiered) ----
-// One adaptive problem. How FAST you answer correctly sets the reward tier
-// (instant/fast/slow); a wrong answer is a curse. Returns the tier so the run
-// applies the matching reward. No countdown shown — speed is what's measured,
-// but we don't want to rush the player with a visible clock here.
 export async function runDecisionPhase(player, { applyReward }) {
   onEnterState("decision");
-  const key = pickFact(ALL_KEYS, masteryFacts); // adaptive: weighted to weak
+  const key = pickFact(ALL_KEYS, masteryFacts);
   const { correct, seconds, correctAnswer } = await askProblem(key, {
     tag: "DECISION · answer fast!",
   });
   const tier = speedTier(seconds, correct);
 
-  // Feedback reflects the tier, not just right/wrong (the speed is the point).
   await flashTierFeedback(tier, correctAnswer, seconds);
 
   if (applyReward) applyReward(tier);
@@ -285,7 +240,6 @@ export async function runDecisionPhase(player, { applyReward }) {
   return { tier, seconds, correct };
 }
 
-// Tiered feedback: celebrate speed, soften a curse (encouraging tone, §16).
 function flashTierFeedback(tier, correctAnswer, seconds) {
   return new Promise((resolve) => {
     const msg = {
@@ -301,11 +255,8 @@ function flashTierFeedback(tier, correctAnswer, seconds) {
 }
 
 // ---- §18 Pre-boss ritual (one problem -> single-use weapon) ----
-// Before a boss fight, one problem. Correct -> the pre-boss weapon connects,
-// removing 1/4 of the boss's max HP (a head start). Wrong -> you fight full HP.
-// Difficulty here pulls from weak facts (the boss is the payoff for drilling).
 export async function runPreBoss(bossName, { onConnect }) {
-  onEnterState("decision"); // reuse the frozen modal state
+  onEnterState("decision");
   const key = pickFactForDifficulty(masteryFacts, ALL_KEYS, "hard");
   const { correct, correctAnswer } = await askProblem(key, {
     tag: `${bossName.toUpperCase()} APPROACHES · STRIKE!`,
@@ -325,16 +276,13 @@ export async function runPreBoss(bossName, { onConnect }) {
 }
 
 // ---- E.3 Respawn (all lives gone; 3 problems / 30s total) ----
-// Returns true if the player revived, false if the run ends. The 30s is shared
-// across all three problems (the countdown keeps running between them). Any
-// wrong answer or running out of time = fail. All three correct = revive.
 export async function runRespawnChallenge(player, { onRevive, onFail }) {
   onEnterState("respawn");
-  const deadline = performance.now() + 30_000; // 30s for all three (§13)
+  const deadline = performance.now() + 30_000;
   let solved = 0;
 
   for (let i = 0; i < 3; i++) {
-    if (performance.now() >= deadline) break; // already out of time
+    if (performance.now() >= deadline) break;
     const key = pickFact(ALL_KEYS, masteryFacts);
     const { correct, correctAnswer } = await askProblem(key, {
       tag: `REVIVE · ${solved + 1} of 3`,
@@ -342,11 +290,9 @@ export async function runRespawnChallenge(player, { onRevive, onFail }) {
     });
     if (correct) {
       solved++;
-      // Quick positive beat between problems (don't eat the shared clock long).
       await flashFeedback(true, correctAnswer);
       if (solved === 3) break;
     } else {
-      // A miss or timeout ends the attempt immediately (E.3).
       await flashFeedback(false, correctAnswer);
       break;
     }

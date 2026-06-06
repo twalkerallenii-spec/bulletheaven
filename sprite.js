@@ -4,23 +4,30 @@
 // getting a SpudMaker pixel sprite or a colored-shape fallback, so swapping art
 // is a contained change here, not a rewrite.
 //
-// PRIMARY path:  SpudMaker `sprites.js` -> CanvasTexture pixel sprites (O.3).
+// PRIMARY path:  SpudMaker `sprites.js` + generated `world-sprites.js` ->
+//                CanvasTexture pixel sprites (O.3).
 // FALLBACK path: code-generated colored disc (L Phase 1) for anything not yet
 //                drawn. This means a missing sprite never blocks the build.
 //
-// `sprites.js` is generated from PNGs (Option B) / SpudMaker. It may not exist
-// yet, so we import it defensively: no file -> SPRITES stays empty -> everything
-// falls back to discs. The slice runs today; real art lights up on drop-in.
+// Both sprite sources are imported defensively: a missing file just means those
+// entries fall back to discs. The slice runs today; real art lights up on drop.
 
 import * as THREE from "three";
 
 let SPRITES = {};
 try {
   const mod = await import("./sprites.js");
-  SPRITES = mod.SPRITES || {};
+  SPRITES = { ...(mod.SPRITES || {}) };
 } catch (e) {
-  // No sprites.js yet — expected during early build. Discs it is.
   console.info("[sprite] no sprites.js found; using colored-shape fallback.");
+}
+// Merge generated world props (trees, bushes, stones, grass, flowers). Kept in
+// a separate module so the hand-drawn sprites.js is never touched.
+try {
+  const wmod = await import("./world-sprites.js");
+  SPRITES = { ...SPRITES, ...(wmod.WORLD_SPRITES || {}) };
+} catch (e) {
+  console.info("[sprite] no world-sprites.js found; props fall back to discs.");
 }
 
 // ---- FALLBACK: colored shapes (design Appendix L Phase 1) ----
@@ -33,10 +40,9 @@ const SHAPE_COLORS = {
   boss: 0xff1744, // intense red
   pickup: 0x69f0ae, // green gem
   projectile: 0xffee58, // yellow bullet
+  prop: 0x2f6b3a, // muted green for undrawn props
 };
 
-// Asset names (what the game requests, matching future SpudMaker sprites) map
-// to a generic kind for fallback coloring. Add an entry per named asset.
 const KIND_ALIAS = {
   hero_frog: "player",
   chaser_imp: "chaser",
@@ -53,11 +59,8 @@ function fallbackColor(kind) {
 }
 
 function makeShapeFallback(kind) {
-  // A flat disc on the XZ plane reads cleanly under the 2.5D tilt camera.
   const geo = new THREE.CircleGeometry(0.5, 16);
-  const mat = new THREE.MeshBasicMaterial({
-    color: fallbackColor(kind),
-  });
+  const mat = new THREE.MeshBasicMaterial({ color: fallbackColor(kind) });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2; // lay flat on the ground plane
   return { mesh, kind, textures: null, setFrame() {} /* no-op */ };
@@ -84,9 +87,33 @@ function frameToTexture(frame, size) {
   return tex;
 }
 
-// The one factory the whole game calls. `kind` is a SpudMaker asset name
-// (e.g. "hero_pistoleer", "chaser_blob") OR a generic kind ("chaser", "player")
-// that falls back to a colored disc.
+// World footprint by asset type. Props are sized against the ~1.4–1.6 character
+// footprint so the world reads coherently (trees tower, stones are underfoot).
+// Per-NAME overrides below handle within-type variation (tree vs grass tuft).
+const SIZE_BY_TYPE = {
+  hero: 1.6,
+  enemy: 1.4,
+  pickup: 0.8,
+  prop: 1.6,
+  boss: 4.0,
+  projectile: 0.9,
+};
+
+// Per-asset world scale + ground anchor. Anchor y (0..1) is where on the sprite
+// the "feet" are: 0.1 = near the bottom (object stands on the ground), 0.5 =
+// centered (flat ground detail). Trees/bushes stand; grass/flowers/stones are
+// low to the ground.
+const PROP_PROFILE = {
+  prop_tree:    { scale: 3.0, anchor: 0.08 }, // towers over the player
+  prop_pine:    { scale: 3.0, anchor: 0.08 },
+  prop_bush:    { scale: 1.5, anchor: 0.12 }, // ~player height-ish
+  prop_stone:   { scale: 1.0, anchor: 0.15 }, // small, underfoot
+  prop_pebbles: { scale: 0.9, anchor: 0.2 },
+  prop_grass:   { scale: 1.1, anchor: 0.2 },  // ground detail
+  prop_flower:  { scale: 1.0, anchor: 0.2 },
+  prop_flower2: { scale: 1.0, anchor: 0.2 },
+};
+
 export function makeSprite(kind) {
   const asset = SPRITES[kind];
   if (!asset) return makeShapeFallback(kind);
@@ -100,13 +127,14 @@ export function makeSprite(kind) {
   const mat = new THREE.SpriteMaterial({ map: textures[0], transparent: true });
   const mesh = new THREE.Sprite(mat); // billboards toward the camera
 
-  // World size by asset type so a boss towers over a chaser. Base enemy/hero
-  // footprint ~1.4 units (a touch bigger than the old disc so art reads); the
-  // sprite is centered, lifted so it sits on the ground rather than through it.
-  const SIZE_BY_TYPE = { hero: 1.6, enemy: 1.4, pickup: 0.8, prop: 1.6, boss: 4.0 };
-  const s = SIZE_BY_TYPE[asset.type] ?? 1.4;
+  // Size: per-name prop profile wins; else by type.
+  const profile = PROP_PROFILE[kind];
+  const s = profile ? profile.scale : SIZE_BY_TYPE[asset.type] ?? 1.4;
   mesh.scale.set(s, s, 1);
-  mesh.center.set(0.5, 0.1); // anchor near the feet so it stands on the plane
+  // Anchor near the feet so the sprite stands on the plane rather than through
+  // it. Props get a profile anchor; entities use the standard near-feet value.
+  const anchorY = profile ? profile.anchor : 0.1;
+  mesh.center.set(0.5, anchorY);
 
   return {
     mesh,

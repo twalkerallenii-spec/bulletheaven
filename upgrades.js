@@ -1,112 +1,90 @@
 // upgrades.js — the level-up upgrade pool + application (design §19, N.3, H).
 //
 // Easy/Med/Hard tiers control the SIZE of a stat jump (easy +5%, med +20%,
-// hard +100% — Appendix H). They do NOT gate behavior changes or evolutions
-// (§19): math difficulty only scales stat magnitude.
+// hard +100% — Appendix H). They do NOT gate behavior changes or evolutions.
 //
-// Each upgrade has an id, label, and an apply(player, boost) that nudges a
-// modifier or stat by `boost` (the tier multiplier). Boosts are additive onto
-// the multiplier (e.g. damage mod 1.0 -> 1.2 for a medium damage upgrade),
-// which stacks predictably across many level-ups.
+// DUPLICATE STACKING (build request): the player can pick the same weapon
+// multiple times. Each pick adds another independent instance, so firepower
+// compounds toward the late-game bullet flood. The slot cap is generous so
+// stacking isn't choked early.
 
 import { CONFIG } from "./config.js";
 import { WEAPONS, makeWeapon } from "./weapons.js";
 
-// Tier -> boost amount (Appendix H: easyBoost/mediumBoost/hardBoost).
 export const TIER_BOOST = {
   easy: CONFIG.easyBoost ?? 0.05,
   medium: CONFIG.mediumBoost ?? 0.2,
   hard: CONFIG.hardBoost ?? 1.0,
 };
 
-// The upgrade pool. Stat-ups apply a fraction of `boost` appropriate to the
-// stat (HP scales off base, multipliers add the boost directly).
 export const UPGRADES = {
   damage: {
-    id: "damage",
-    label: "Damage",
-    icon: "⚔",
-    desc: "Bullets hit harder",
-    apply: (player, boost) => {
-      player.mods.damage += boost;
-    },
+    id: "damage", label: "Damage", icon: "⚔", desc: "Bullets hit harder",
+    apply: (player, boost) => { player.mods.damage += boost; },
   },
   firerate: {
-    id: "firerate",
-    label: "Fire Rate",
-    icon: "⟳",
-    desc: "Shoot faster",
-    apply: (player, boost) => {
-      player.mods.fireRate += boost;
-    },
+    id: "firerate", label: "Fire Rate", icon: "⟳", desc: "Shoot faster",
+    apply: (player, boost) => { player.mods.fireRate += boost; },
   },
   bulletspeed: {
-    id: "bulletspeed",
-    label: "Bullet Speed",
-    icon: "➹",
-    desc: "Faster projectiles",
-    apply: (player, boost) => {
-      player.mods.projectileSpeed += boost;
-    },
+    id: "bulletspeed", label: "Bullet Speed", icon: "➹", desc: "Faster projectiles",
+    apply: (player, boost) => { player.mods.projectileSpeed += boost; },
   },
   maxhp: {
-    id: "maxhp",
-    label: "Max HP",
-    icon: "✚",
-    desc: "Tougher",
+    id: "maxhp", label: "Max HP", icon: "✚", desc: "Tougher",
     apply: (player, boost) => {
-      // Scale off base HP so it's meaningful at any tier; also heal the gain.
       const gain = Math.round(player.maxHp * boost);
       player.maxHp += gain;
       player.hp = Math.min(player.maxHp, player.hp + gain);
     },
   },
   movespeed: {
-    id: "movespeed",
-    label: "Move Speed",
-    icon: "✦",
-    desc: "Move quicker",
+    id: "movespeed", label: "Move Speed", icon: "✦", desc: "Move quicker",
     apply: (player, boost) => {
-      // Cap so the player can't outrun the whole game; half-effect on speed.
       player.speedMult = Math.min(2.0, player.speedMult + boost * 0.5);
     },
   },
   magnet: {
-    id: "magnet",
-    label: "Magnet",
-    icon: "◎",
-    desc: "Bigger pickup range",
-    apply: (player, boost) => {
-      player.stats.pickupRange += boost;
-    },
+    id: "magnet", label: "Magnet", icon: "◎", desc: "Bigger pickup range",
+    apply: (player, boost) => { player.stats.pickupRange += boost; },
   },
 };
 
 const STAT_POOL = Object.keys(UPGRADES);
-const MAX_WEAPONS = CONFIG.weaponSlots ?? 6;
+// Generous cap so duplicate stacking can build the flood (design said 6; the
+// build request is explicitly to stack toward dozens of guns firing).
+const MAX_WEAPONS = CONFIG.weaponSlots ?? 24;
+const ALL_WEAPON_IDS = Object.keys(WEAPONS);
 
-// Build the choice pool given the player's current state (VS-style):
-//   • stat upgrades (always available)
-//   • "new weapon" grants for weapons the player doesn't own yet (until the
-//     6-slot cap), so level-ups can expand the arsenal
-//   • "level up weapon X" for owned weapons below max level
-// Returns an array of choice descriptors the level-up screen renders.
+// How many copies of a weapon the player holds.
+function countOf(player, weaponId) {
+  return player.weapons.reduce((n, w) => n + (w.id === weaponId ? 1 : 0), 0);
+}
+
+// Build the choice pool. With duplicates allowed, the headline option is
+// "add another <gun>" for ANY gun (owned or not), until the (generous) slot cap.
+// Owned guns under max level can also be LEVELED. Stat upgrades always present.
 export function buildChoicePool(player) {
-  const owned = new Set(player.weapons.map((w) => w.id));
   const pool = [];
 
-  // stat upgrades
+  // stat upgrades (always available)
   for (const id of STAT_POOL) pool.push({ kind: "stat", upgradeId: id });
 
-  // new-weapon grants (if room)
-  if (player.weapons.length < MAX_WEAPONS) {
-    for (const wid of Object.keys(WEAPONS)) {
-      if (!owned.has(wid)) pool.push({ kind: "newWeapon", weaponId: wid });
+  const hasRoom = player.weapons.length < MAX_WEAPONS;
+  if (hasRoom) {
+    for (const wid of ALL_WEAPON_IDS) {
+      const owned = countOf(player, wid);
+      // offer adding (another) copy — label distinguishes new vs duplicate
+      pool.push({ kind: owned > 0 ? "dupWeapon" : "newWeapon", weaponId: wid });
     }
   }
 
-  // weapon level-ups for owned weapons under max level
+  // weapon level-ups for owned weapons under max level (level the *stack* of
+  // that id; we level the lowest-level instance so copies progress together).
+  const seen = new Set();
   for (const w of player.weapons) {
+    if (seen.has(w.id)) continue;
+    seen.add(w.id);
     const def = WEAPONS[w.id];
     if (w.level < (def.maxLevel ?? 8)) {
       pool.push({ kind: "weaponLevel", weaponId: w.id });
@@ -116,51 +94,56 @@ export function buildChoicePool(player) {
   return pool;
 }
 
-// Pick `n` distinct choices from the player-aware pool, weighting toward
-// offering new weapons early (they're the exciting VS moment).
+// Pick `n` distinct choices, weighting toward offering weapons (new AND
+// duplicates) so the arsenal/flood grows — that's the exciting moment.
 export function rollChoices(player, n = 3) {
   const pool = buildChoicePool(player);
-  // Light weighting: new weapons a bit more likely to surface so the arsenal
-  // grows; otherwise uniform.
   const weighted = [];
   for (const c of pool) {
     weighted.push(c);
-    if (c.kind === "newWeapon") weighted.push(c); // double weight
+    if (c.kind === "newWeapon") weighted.push(c, c); // new guns surface most
+    if (c.kind === "dupWeapon") weighted.push(c); // duplicates a bit boosted too
   }
   const picked = [];
   const seen = new Set();
   let guard = 0;
-  while (picked.length < n && guard++ < 200) {
+  while (picked.length < n && guard++ < 300) {
     const c = weighted[(Math.random() * weighted.length) | 0];
-    const sig =
-      c.kind + ":" + (c.upgradeId || c.weaponId); // de-dupe identical choices
+    // de-dupe identical OFFERS within one level-up screen (but dup vs level of
+    // same gun are different offers and may both appear)
+    const sig = c.kind + ":" + (c.upgradeId || c.weaponId);
     if (!seen.has(sig)) {
       seen.add(sig);
       picked.push(c);
     }
   }
+  // Fallback: if the pool was tiny, allow repeats so we always show n cards.
+  while (picked.length < n && pool.length) {
+    picked.push(pool[(Math.random() * pool.length) | 0]);
+  }
   return picked;
 }
 
-// Describe a choice for the UI: icon, label, desc.
-export function describeChoice(c) {
+// Describe a choice for the UI: icon, label, desc. Duplicates show the current
+// stack count so the player sees the firepower compounding.
+export function describeChoice(c, player) {
   if (c.kind === "stat") {
     const u = UPGRADES[c.upgradeId];
     return { icon: u.icon, label: u.label, desc: u.desc };
   }
   if (c.kind === "newWeapon") {
+    return { icon: "✷", label: WEAPONS[c.weaponId].name, desc: "New weapon!" };
+  }
+  if (c.kind === "dupWeapon") {
+    const have = player ? countOf(player, c.weaponId) : 0;
     return {
-      icon: "✷",
+      icon: "✚",
       label: WEAPONS[c.weaponId].name,
-      desc: "New weapon!",
+      desc: have ? `+1 more (have ${have})` : "Another copy",
     };
   }
   if (c.kind === "weaponLevel") {
-    return {
-      icon: "▲",
-      label: WEAPONS[c.weaponId].name,
-      desc: "Level up weapon",
-    };
+    return { icon: "▲", label: WEAPONS[c.weaponId].name, desc: "Level up" };
   }
   return { icon: "?", label: "?", desc: "" };
 }
@@ -172,23 +155,23 @@ export function applyChoice(player, c, tier, { missed = false } = {}) {
 
   if (c.kind === "stat") {
     UPGRADES[c.upgradeId].apply(player, boost);
-  } else if (c.kind === "newWeapon") {
-    // Grant the weapon (ignores boost — it's a binary unlock). A miss still
-    // grants it; the math gated whether you "earned" it cleanly, but VS never
-    // takes a weapon away once offered and chosen.
-    if (
-      player.weapons.length < MAX_WEAPONS &&
-      !player.weapons.some((w) => w.id === c.weaponId)
-    ) {
+  } else if (c.kind === "newWeapon" || c.kind === "dupWeapon") {
+    // Grant (another) instance of the weapon — duplicates stack. A miss still
+    // grants it (VS never revokes a chosen weapon); the math gated the *clean*
+    // earn, not whether you get the gun.
+    if (player.weapons.length < MAX_WEAPONS) {
       player.weapons.push(makeWeapon(c.weaponId));
     }
   } else if (c.kind === "weaponLevel") {
-    const w = player.weapons.find((x) => x.id === c.weaponId);
-    if (w) {
-      w.level += 1;
-      // Leveling a weapon improves its own stats a bit (scaled by tier boost).
-      w.damage *= 1 + boost * 0.5;
-      w.fireInterval *= 1 - Math.min(0.4, boost * 0.2); // faster, floored
+    // Level the lowest-level instance of this id so a stack progresses evenly.
+    let target = null;
+    for (const w of player.weapons) {
+      if (w.id === c.weaponId && (!target || w.level < target.level)) target = w;
+    }
+    if (target) {
+      target.level += 1;
+      target.damage *= 1 + boost * 0.5;
+      target.fireInterval *= 1 - Math.min(0.4, boost * 0.2);
     }
   }
 }

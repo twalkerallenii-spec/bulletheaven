@@ -1,8 +1,4 @@
 // main.js — boot, game state machine, fixed-timestep main loop (Appendix D.3).
-//
-// Steps 1-2 slice: boots straight into RUN with a movable player on the arena.
-// MENU / CLASS_SELECT / DECISION / LEVELUP / RESPAWN / GAMEOVER are declared now
-// (the full machine from the design) but only RUN does anything yet.
 
 import { makeScene, updateCamera } from "./scene.js";
 import { makePlayer, updatePlayer } from "./player.js";
@@ -42,7 +38,7 @@ const STATES = {
   GAMEOVER: "gameover",
 };
 
-let state = STATES.RUN; // slice: skip menus, go straight to a movable arena
+let state = STATES.RUN;
 
 // --- boot ---
 const { scene, camera, renderer } = makeScene();
@@ -56,12 +52,10 @@ initPickups(scene);
 initProps(scene);
 initBosses(scene);
 
-// --- run-scoped tallies (banked to progress on run end later) ---
 const run = { timeEarned: 0, elapsed: 0 };
 
 initHUD();
 
-// --- arithmetic engine: load the precious mastery log, wire the math moments ---
 const mastery = loadMastery();
 initMathMoments({
   facts: mastery.facts,
@@ -73,14 +67,12 @@ initMathMoments({
   },
 });
 
-// --- the XP clock (design D.4): XP fills -> level-up -> the math heartbeat ---
-// Guard so a level-up in progress can't re-trigger from queued XP.
 let levelUpPending = false;
 function onXPGained(amount) {
   player.xp += amount;
   if (player.xp >= player.xpToNext && !levelUpPending && state === STATES.RUN) {
     player.xp -= player.xpToNext;
-    player.xpToNext = Math.round(player.xpToNext * CONFIG.xpGrowth); // grows each level (D.4)
+    player.xpToNext = Math.round(player.xpToNext * CONFIG.xpGrowth);
     levelUpPending = true;
     runLevelUp(player).finally(() => {
       levelUpPending = false;
@@ -88,16 +80,13 @@ function onXPGained(amount) {
   }
 }
 
-// --- kill -> drops; pickup -> grants ---
 function onKill(enemy, x, z) {
   const r = rewardFor(enemy.kind);
-  // Drop an XP gem and a Time orb at the death spot (slight offset so they
-  // don't perfectly overlap).
   spawnPickup(x - 0.2, z, "xp", r.xp);
   spawnPickup(x + 0.2, z, "time", r.time);
 }
 
-const PICKUP_RANGE = CONFIG.basePickupRange; // N.4
+const PICKUP_RANGE = CONFIG.basePickupRange;
 const PICKUP_FLY = CONFIG.pickupFlySpeed;
 const pickupCallbacks = {
   onXp: (amt) => onXPGained(amt),
@@ -105,22 +94,20 @@ const pickupCallbacks = {
     run.timeEarned += amt;
   },
   get pickupRange() {
-    return PICKUP_RANGE * (1 + player.stats.pickupRange); // magnet scales it
+    return PICKUP_RANGE * (1 + player.stats.pickupRange);
   },
   flySpeed: PICKUP_FLY,
 };
 
-// 0 lives -> the Respawn challenge (E.3): solve 3 problems in 30s to revive,
-// else the run ends. Reuses the math-moment flow.
 let respawnPending = false;
 function onLifeLost() {
   if (respawnPending) return;
   respawnPending = true;
   runRespawnChallenge(player, {
     onRevive: () => {
-      player.lives = 1; // back in with one life (a real second chance)
+      player.lives = 1;
       player.hp = player.maxHp;
-      player.iframe = CONFIG.iframeDuration * 3; // brief grace on revive
+      player.iframe = CONFIG.iframeDuration * 3;
     },
     onFail: () => {
       state = STATES.GAMEOVER;
@@ -130,7 +117,6 @@ function onLifeLost() {
   });
 }
 
-// --- Decision Phase (E.1): fires every 30–60s during RUN, speed-tiered ---
 let decisionTimer = randDecisionInterval();
 let decisionPending = false;
 function randDecisionInterval() {
@@ -154,12 +140,11 @@ function applyDecisionReward(tier) {
   if (r.time) run.timeEarned = Math.max(0, run.timeEarned + r.time);
   if (r.heal) player.hp = Math.min(player.maxHp, player.hp + r.heal);
   if (r.damage) {
-    player.hp -= r.damage; // a curse can hurt, but won't instantly end a run
-    if (player.hp <= 0) player.hp = 1; // floor at 1 — curses sting, don't kill
+    player.hp -= r.damage;
+    if (player.hp <= 0) player.hp = 1;
   }
 }
 
-// --- Threat clock (D.4, §18): a boss appears at kill thresholds ---
 let nextBossAt = CONFIG.firstBossAt ?? 80;
 let bossSequencePending = false;
 function tickThreatClock() {
@@ -167,7 +152,6 @@ function tickThreatClock() {
   if (getKills() >= nextBossAt) {
     nextBossAt += CONFIG.bossEvery ?? 150;
     bossSequencePending = true;
-    // Spawn the boss, then run the pre-boss math ritual (freezes the game).
     const b = spawnBoss("chronodragon", player.position);
     runPreBoss(b.name, { onConnect: () => prebossHit() }).finally(() => {
       bossSequencePending = false;
@@ -175,29 +159,23 @@ function tickThreatClock() {
   }
 }
 function onBossDefeated(defeated) {
-  // Reward: big Time + a heal (mastery-bonus hook is a later item, §18).
   run.timeEarned += CONFIG.timeBoss ?? 300;
   player.hp = Math.min(player.maxHp, player.hp + 40);
 }
 
-// Slice-only restart: reload the page for a guaranteed-clean reset. A proper
-// run-reset + summary screen arrives with the menu work.
 addEventListener("keydown", (e) => {
   if (e.code === "KeyR" && state === STATES.GAMEOVER) location.reload();
-  // TEMP test hook: P fires a Decision Phase now (real cadence is the 30–60s
-  // clock above). Remove once you've confirmed the speed tiers feel right.
   if (e.code === "KeyP" && state === STATES.RUN && !decisionPending) {
     decisionTimer = 0;
   }
 });
 
-// --- fixed timestep (Appendix D.3) ---
-const STEP = 1 / 60; // fixed physics/update step
+const STEP = 1 / 60;
 let acc = 0;
 let last = performance.now();
 
 function frame(now) {
-  acc += Math.min((now - last) / 1000, 0.25); // clamp huge gaps (tab refocus)
+  acc += Math.min((now - last) / 1000, 0.25);
   last = now;
   while (acc >= STEP) {
     update(STEP);
@@ -209,30 +187,28 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 function update(dt) {
-  // Math states FREEZE gameplay: the loop runs but entities don't advance.
   if (state !== STATES.RUN) return;
 
-  run.elapsed += dt; // run timer (frozen during math moments by the early return)
+  run.elapsed += dt;
   updatePlayer(player, dt);
-  updateEnemies(dt, player); // spawn + home toward player
-  updateBoss(dt, player, onBossDefeated); // boss movement + attacks
-  updateWeapons(dt, player); // auto-fire at nearest
-  updateProjectiles(dt); // advance bullets, expire old ones
-  updateCombat(dt, player, onKill, onLifeLost); // hits, deaths, contact dmg
-  updatePickups(dt, player, pickupCallbacks); // magnet + collect -> XP/Time
-  updateProps(player); // scatter scenery around the player
-  tickDecisionClock(dt); // every 30–60s -> speed-tiered math prompt
-  tickThreatClock(); // boss at kill thresholds
+  updateEnemies(dt, player);
+  updateBoss(dt, player, onBossDefeated);
+  updateWeapons(dt, player);
+  updateProjectiles(dt);
+  updateCombat(dt, player, onKill, onLifeLost);
+  updatePickups(dt, player, pickupCallbacks);
+  updateProps(player);
+  tickDecisionClock(dt);
+  tickThreatClock();
 }
 
 function render() {
-  updateCamera(camera, player.position);
+  updateCamera(camera, player.position, scene); // scene -> ground follows player
   renderer.render(scene, camera);
   updateHUD(player, run, activeBoss());
   updateDebug();
 }
 
-// --- dev readout (small; the real HUD now carries hp/xp/time/lives/timer) ---
 const debugEl = document.getElementById("debug-readout");
 let fpsSmooth = 60;
 let lastRenderT = performance.now();
@@ -243,7 +219,7 @@ function updateDebug() {
   if (dt > 0) fpsSmooth = fpsSmooth * 0.9 + (1 / dt) * 0.1;
   const dead = state === STATES.GAMEOVER;
   debugEl.textContent =
-    `fps ${fpsSmooth.toFixed(0)} · enemies ${activeEnemies().length}\n` +
+    `fps ${fpsSmooth.toFixed(0)} · enemies ${activeEnemies().length} · guns ${player.weapons.length}\n` +
     `decision in ${Math.max(0, decisionTimer).toFixed(0)}s · [P] test\n` +
     (dead ? `GAME OVER — press [R] to restart` : `WASD/arrows to move`);
 }
