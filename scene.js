@@ -6,7 +6,10 @@
 
 import * as THREE from "three";
 
-const CAMERA_OFFSET = { y: 22, z: 14 };
+// Camera height/back-offset. Lower + closer = more zoomed-in (the hero and
+// enemies read at a good size rather than tiny and distant). Tilt is preserved
+// by keeping z roughly 0.65x of y.
+const CAMERA_OFFSET = { y: 13, z: 8.5 };
 
 // --- embedded Pixel Crawler ground tiles (16x16 PNGs, base64) ---
 const GRASS_TILES = [
@@ -109,7 +112,7 @@ function makeGroundTexture() {
 export function makeScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x3a7d3a);
-  scene.fog = new THREE.Fog(0x3f7f3a, 70, 130);
+  scene.fog = new THREE.Fog(0x3f7f3a, 28, 60);
 
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 1000);
   camera.position.set(0, CAMERA_OFFSET.y, CAMERA_OFFSET.z);

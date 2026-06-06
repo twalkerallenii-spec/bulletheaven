@@ -68,8 +68,10 @@ export function makePlayer(scene) {
     xpToNext: CONFIG.xpBase ?? 25,
     speedMult: 1,
     weapons: [],
-    // upgrade modifiers (weapons.js reads these; upgrades.js writes them)
-    mods: { damage: 0, fireRate: 0, projectileSpeed: 0 },
+    // upgrade modifiers — these are MULTIPLIERS (weapons.js multiplies by them),
+    // so they start at 1.0 and upgrades add to them (mods.damage += boost).
+    // Starting at 0 would make damage/speed zero and the hero wouldn't fire.
+    mods: { damage: 1, fireRate: 1, projectileSpeed: 1 },
     stats: { pickupRange: 0 },
     // animation bookkeeping
     facing: "down",
