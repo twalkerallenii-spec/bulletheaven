@@ -11,7 +11,7 @@
 import * as THREE from "three";
 import { makeSprite, hasBulletSprite } from "./sprite.js";
 
-const POOL_SIZE = 400;
+const POOL_SIZE = 800;
 const GEM_RADIUS = 0.22;
 const COLLECT_DIST = 0.55;
 const COIN_FPS = 10; // coin spin speed
