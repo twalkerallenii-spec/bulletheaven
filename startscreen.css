@@ -1,0 +1,305 @@
+/* startscreen.css — Retro Atari/SNES-style start screen */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* ========== COLOR PALETTE ========== */
+:root {
+  --retro-bg: #0a0e0f;
+  --retro-border: #ffb800;
+  --retro-border-light: #ffd700;
+  --retro-border-dark: #cc6600;
+  --retro-text: #ffff00;
+  --retro-text-shadow: #0a0e0f;
+  --retro-accent: #00ff00;
+  --retro-button: #cc0000;
+  --retro-button-hover: #ff0000;
+  --retro-panel: #1a1a2e;
+}
+
+/* ========== BASE STYLES ========== */
+.retro-start-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--retro-bg);
+  font-family: 'Press Start 2P', monospace;
+  color: var(--retro-text);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+  /* CRT scanlines effect */
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.15) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  overflow: hidden;
+}
+
+.retro-start-screen.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ========== SCREEN BORDER (OLD ARCADE CABINET STYLE) ========== */
+.screen-border {
+  border: 8px solid var(--retro-border);
+  box-shadow: 
+    inset 0 0 0 2px var(--retro-border-light),
+    inset 0 0 0 4px var(--retro-border-dark),
+    0 0 20px rgba(255, 184, 0, 0.5);
+}
+
+.outer-border {
+  width: 90vw;
+  max-width: 900px;
+  height: 85vh;
+  max-height: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inner-border {
+  width: 100%;
+  height: 100%;
+  border: 6px solid var(--retro-border-dark);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+  background: linear-gradient(135deg, #0f1419 0%, #1a1a2e 50%, #0f1419 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* ========== MAIN CONTENT ========== */
+.start-screen-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  gap: 16px;
+}
+
+/* ========== TITLE SECTION ========== */
+.title-section {
+  position: relative;
+  margin-top: 20px;
+}
+
+.game-title-main {
+  font-size: clamp(32px, 8vw, 56px);
+  color: var(--retro-text);
+  text-shadow: 
+    4px 4px 0 var(--retro-text-shadow),
+    6px 6px 0 var(--retro-border-dark),
+    2px 2px 0 var(--retro-accent);
+  letter-spacing: 4px;
+  margin: 0;
+  line-height: 1.2;
+  animation: title-pulse 2s ease-in-out infinite;
+}
+
+@keyframes title-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.game-subtitle {
+  font-size: clamp(10px, 2vw, 14px);
+  color: var(--retro-accent);
+  letter-spacing: 2px;
+  margin-top: 8px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+  animation: subtitle-fade 1.5s ease-in-out infinite;
+}
+
+@keyframes subtitle-fade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ========== CONTENT SECTION ========== */
+.content-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  flex: 1;
+  justify-content: center;
+}
+
+/* ========== ARCADE BOX ========== */
+.arcade-box {
+  width: min(500px, 90%);
+  background: var(--retro-panel);
+  border: 4px solid var(--retro-border);
+  box-shadow: 
+    inset 0 0 0 2px var(--retro-border-light),
+    3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+
+.box-header {
+  background: var(--retro-border);
+  color: var(--retro-text-shadow);
+  padding: 4px 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  border-bottom: 2px solid var(--retro-border-dark);
+}
+
+.box-content {
+  padding: 12px;
+  font-size: clamp(9px, 1.5vw, 11px);
+  color: var(--retro-accent);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+  line-height: 1.6;
+}
+
+.box-content.small {
+  font-size: clamp(8px, 1.2vw, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ========== FEATURES ========== */
+.game-features {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--retro-panel);
+  border: 2px solid var(--retro-border);
+  padding: 8px 12px;
+  font-size: clamp(9px, 1.5vw, 11px);
+  color: var(--retro-accent);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.feature-icon {
+  font-size: clamp(16px, 3vw, 20px);
+  display: inline-block;
+  animation: feature-bounce 1s ease-in-out infinite;
+}
+
+.feature-row:nth-child(1) .feature-icon { animation-delay: 0s; }
+.feature-row:nth-child(2) .feature-icon { animation-delay: 0.2s; }
+.feature-row:nth-child(3) .feature-icon { animation-delay: 0.4s; }
+
+@keyframes feature-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ========== ARCADE BUTTON ========== */
+.arcade-button {
+  width: min(400px, 85%);
+  padding: 14px 20px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(12px, 2vw, 16px);
+  font-weight: bold;
+  color: #ffff00;
+  background: var(--retro-button);
+  border: 4px solid #000;
+  box-shadow: 
+    inset -4px -4px 0 rgba(0, 0, 0, 0.6),
+    inset 4px 4px 0 rgba(255, 255, 255, 0.2),
+    4px 4px 0 rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: all 0.08s;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+}
+
+.arcade-button:hover {
+  background: var(--retro-button-hover);
+  transform: translate(-2px, -2px);
+  box-shadow: 
+    inset -4px -4px 0 rgba(0, 0, 0, 0.6),
+    inset 4px 4px 0 rgba(255, 255, 255, 0.2),
+    6px 6px 0 rgba(0, 0, 0, 0.8);
+}
+
+.arcade-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 
+    inset -4px -4px 0 rgba(0, 0, 0, 0.6),
+    inset 4px 4px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 rgba(0, 0, 0, 0.8);
+}
+
+.button-text {
+  display: block;
+  letter-spacing: 3px;
+}
+
+/* ========== DECORATIVE LINES ========== */
+.decorative-line {
+  width: 80%;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--retro-border),
+    var(--retro-border) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ========== PRESS START PROMPT ========== */
+.press-start-prompt {
+  font-size: clamp(10px, 1.8vw, 13px);
+  color: var(--retro-text);
+  letter-spacing: 2px;
+  animation: blink-prompt 0.8s steps(1) infinite;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+  margin-bottom: 12px;
+}
+
+@keyframes blink-prompt {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 600px) {
+  .outer-border {
+    width: 95vw;
+    height: 90vh;
+  }
+  
+  .feature-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .arcade-box {
+    width: 95%;
+  }
+}
+
+/* Hide when not active */
+.retro-start-screen.hidden {
+  display: none;
+}
