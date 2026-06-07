@@ -27,6 +27,7 @@ import {
   activeBoss,
   prebossHit,
 } from "./bosses.js";
+import { initStartScreen, showStartScreen } from "./startscreen.js";
 
 const STATES = {
   MENU: "menu",
@@ -39,7 +40,7 @@ const STATES = {
   GAMEOVER: "gameover",
 };
 
-let state = STATES.RUN;
+let state = STATES.MENU;
 
 // --- boot ---
 const { scene, camera, renderer } = makeScene();
@@ -57,12 +58,25 @@ initBosses(scene);
 const run = { timeEarned: 0, elapsed: 0 };
 
 initHUD();
+initStartScreen();
 
 const mastery = loadMastery();
 initMathMoments({
   facts: mastery.facts,
   enterState: (s) => { state = s; },
   resume: () => { state = STATES.RUN; },
+});
+
+// Show start screen on boot
+showStartScreen(() => {
+  state = STATES.RUN;
+  run.timeEarned = 0;
+  run.elapsed = 0;
+  player.xp = 0;
+  player.level = 1;
+  player.hp = player.maxHp;
+  player.lives = CONFIG.startingLives;
+  decisionTimer = randDecisionInterval();
 });
 
 let levelUpPending = false;
