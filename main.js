@@ -1,5 +1,5 @@
 // main.js — boot, game state machine, fixed-timestep main loop (Appendix D.3).
-
+ 
 import { makeScene, updateCamera } from "./scene.js";
 import { makePlayer, updatePlayer } from "./player.js";
 import { initEnemies, updateEnemies, activeEnemies, getKills } from "./enemies.js";
@@ -27,7 +27,7 @@ import {
   activeBoss,
   prebossHit,
 } from "./bosses.js";
-
+ 
 const STATES = {
   MENU: "menu",
   CLASS_SELECT: "classSelect",
@@ -38,14 +38,14 @@ const STATES = {
   PAUSED: "paused",
   GAMEOVER: "gameover",
 };
-
+ 
 let state = STATES.RUN;
-
+ 
 // --- boot ---
 const { scene, camera, renderer } = makeScene();
 const player = makePlayer(scene);
 player.weapons.push(makeWeapon("pistol"));
-
+ 
 initProjectiles(scene);
 initEnemies(scene);
 initCombat(camera);
@@ -53,18 +53,18 @@ initEffects(scene);
 initPickups(scene);
 initProps(scene);
 initBosses(scene);
-
+ 
 const run = { timeEarned: 0, elapsed: 0 };
-
+ 
 initHUD();
-
+ 
 const mastery = loadMastery();
 initMathMoments({
   facts: mastery.facts,
   enterState: (s) => { state = s; },
   resume: () => { state = STATES.RUN; },
 });
-
+ 
 // Initialize game directly without start screens
 state = STATES.RUN;
 run.timeEarned = 0;
@@ -73,8 +73,7 @@ player.xp = 0;
 player.level = 1;
 player.hp = player.maxHp;
 player.lives = CONFIG.startingLives;
-decisionTimer = randDecisionInterval();
-
+ 
 let levelUpPending = false;
 function onXPGained(amount) {
   player.xp += amount;
@@ -85,13 +84,13 @@ function onXPGained(amount) {
     runLevelUp(player).finally(() => { levelUpPending = false; });
   }
 }
-
+ 
 function onKill(enemy, x, z) {
   const r = rewardFor(enemy.kind);
   spawnPickup(x - 0.2, z, "xp", r.xp);
   spawnPickup(x + 0.2, z, "time", r.time);
 }
-
+ 
 const PICKUP_RANGE = CONFIG.basePickupRange;
 const PICKUP_FLY = CONFIG.pickupFlySpeed;
 const pickupCallbacks = {
@@ -100,7 +99,7 @@ const pickupCallbacks = {
   get pickupRange() { return PICKUP_RANGE * (1 + player.stats.pickupRange); },
   flySpeed: PICKUP_FLY,
 };
-
+ 
 let respawnPending = false;
 function onLifeLost() {
   if (respawnPending) return;
@@ -114,7 +113,7 @@ function onLifeLost() {
     onFail: () => { state = STATES.GAMEOVER; },
   }).finally(() => { respawnPending = false; });
 }
-
+ 
 let decisionTimer = randDecisionInterval();
 let decisionPending = false;
 function randDecisionInterval() {
@@ -142,7 +141,7 @@ function applyDecisionReward(tier) {
     if (player.hp <= 0) player.hp = 1;
   }
 }
-
+ 
 let nextBossAt = CONFIG.firstBossAt ?? 80;
 let bossSequencePending = false;
 function tickThreatClock() {
@@ -160,18 +159,18 @@ function onBossDefeated(defeated) {
   run.timeEarned += CONFIG.timeBoss ?? 300;
   player.hp = Math.min(player.maxHp, player.hp + 40);
 }
-
+ 
 addEventListener("keydown", (e) => {
   if (e.code === "KeyR" && state === STATES.GAMEOVER) location.reload();
   if (e.code === "KeyP" && state === STATES.RUN && !decisionPending) {
     decisionTimer = 0;
   }
 });
-
+ 
 const STEP = 1 / 60;
 let acc = 0;
 let last = performance.now();
-
+ 
 function frame(now) {
   acc += Math.min((now - last) / 1000, 0.25);
   last = now;
@@ -183,10 +182,10 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-
+ 
 function update(dt) {
   if (state !== STATES.RUN) return;
-
+ 
   run.elapsed += dt;
   updatePlayer(player, dt);
   updateEnemies(dt, player);
@@ -200,14 +199,14 @@ function update(dt) {
   tickDecisionClock(dt);
   tickThreatClock();
 }
-
+ 
 function render() {
   updateCamera(camera, player.position, scene);
   renderer.render(scene, camera);
   updateHUD(player, run, activeBoss());
   updateDebug();
 }
-
+ 
 const debugEl = document.getElementById("debug-readout");
 let fpsSmooth = 60;
 let lastRenderT = performance.now();
