@@ -1,4 +1,4 @@
-// startscreen.js — Old school Atari/SNES-style start screen
+// startscreen.js — Main menu and start screen for Math Adventure (Appendix D.1)
 
 let startScreenEl = null;
 let onStartClick = null;
@@ -10,70 +10,41 @@ export function initStartScreen() {
 function buildStartScreenDOM() {
   startScreenEl = document.createElement("div");
   startScreenEl.id = "start-screen";
-  startScreenEl.className = "retro-start-screen";
   startScreenEl.innerHTML = `
-    <div class="screen-border outer-border">
-      <div class="screen-border inner-border">
-        <div class="start-screen-content">
-          
-          <!-- TOP DECORATIVE BORDER -->
-          <div class="decorative-line top"></div>
-          
-          <!-- TITLE SECTION -->
-          <div class="title-section">
-            <h1 class="game-title-main">BULLET<br>HEAVEN</h1>
-            <div class="game-subtitle">Math-Powered Bullet Hell</div>
+    <div id="start-screen-content">
+      <div id="start-screen-header">
+        <h1 id="game-title">MATH ADVENTURE</h1>
+        <div id="game-subtitle">Master the equations. Defeat the bosses.</div>
+      </div>
+      
+      <div id="start-screen-middle">
+        <div id="game-description">
+          <p>Battle through waves of enemies by solving math problems at lightning speed.</p>
+          <p>Level up to unlock powerful upgrades. Solve faster for bigger rewards!</p>
+        </div>
+        
+        <button id="start-button" class="start-btn">START GAME</button>
+        
+        <div id="start-screen-stats">
+          <div class="stat-item">
+            <span class="stat-icon">⚡</span>
+            <span class="stat-label">Speed Matters</span>
           </div>
-          
-          <!-- MAIN CONTENT -->
-          <div class="content-section">
-            <div class="arcade-box">
-              <div class="box-header">OBJECTIVE</div>
-              <div class="box-content">
-                Master equations to survive waves of enemies and defeat powerful bosses.
-              </div>
-            </div>
-            
-            <div class="game-features">
-              <div class="feature-row">
-                <span class="feature-icon">⚡</span>
-                <span class="feature-text">Speed Matters</span>
-              </div>
-              <div class="feature-row">
-                <span class="feature-icon">🎯</span>
-                <span class="feature-text">Accuracy Counts</span>
-              </div>
-              <div class="feature-row">
-                <span class="feature-icon">💪</span>
-                <span class="feature-text">Power Ups</span>
-              </div>
-            </div>
-            
-            <button id="start-button" class="arcade-button">
-              <span class="button-text">► START GAME ◄</span>
-            </button>
-            
-            <div class="arcade-box">
-              <div class="box-header">CONTROLS</div>
-              <div class="box-content small">
-                <div>WASD or Arrow Keys to Move</div>
-                <div>Click or Space to Shoot</div>
-              </div>
-            </div>
+          <div class="stat-item">
+            <span class="stat-icon">🎯</span>
+            <span class="stat-label">Accuracy Counts</span>
           </div>
-          
-          <!-- BOTTOM DECORATIVE BORDER -->
-          <div class="decorative-line bottom"></div>
-          
-          <!-- PRESS START PROMPT -->
-          <div class="press-start-prompt">
-            ▼ PRESS START ▼
+          <div class="stat-item">
+            <span class="stat-icon">💪</span>
+            <span class="stat-label">Power Up</span>
           </div>
-          
         </div>
       </div>
-    </div>
-  `;
+      
+      <div id="start-screen-footer">
+        <div id="controls-hint">Use WASD or Arrow Keys to move • Click to shoot</div>
+      </div>
+    </div>`;
   
   document.getElementById("ui-overlay").appendChild(startScreenEl);
   
