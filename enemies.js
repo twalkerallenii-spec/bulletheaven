@@ -39,6 +39,7 @@ const enemyBullets = [];
 let spawnTimer = 0;
 let runElapsed = 0;
 let totalKills = 0;
+let playerLevel = 0;
 
 export function initEnemies(sceneRef) {
   scene = sceneRef;
@@ -54,7 +55,11 @@ function scaleNow() {
 }
 
 function spawnInterval() {
-  return Math.max(0.18, 0.7 - runElapsed * 0.0009);
+  // Base interval decreases over time AND with player level
+  // Level scaling: each level reduces spawn interval by ~3-4%
+  const levelModifier = Math.pow(0.96, playerLevel);
+  const baseInterval = Math.max(0.18, 0.7 - runElapsed * 0.0009);
+  return baseInterval * levelModifier;
 }
 
 function ringSpawn(playerPos, radius = SPAWN_RADIUS) {
@@ -123,6 +128,11 @@ function spawnEnemyBullet(x, z, tx, tz, def) {
 export function updateEnemies(dt, player) {
   const p = player.position;
   runElapsed += dt;
+  
+  // Update player level from player.level or calculate from XP
+  // Assuming player has a level property; adjust if it's stored differently
+  playerLevel = player.level ?? 0;
+  
   const sc = scaleNow();
 
   spawnTimer += dt;
